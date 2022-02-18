@@ -5,7 +5,7 @@ ifneq ($(KERNELRELEASE),)
 # copied. These files are drivers/dma/dmaengine.h and drivers/dma/virt-dma.h
 ccflags-y += -I$(src)/kernel/5.4/drivers/dma
 
-CFLAGS_akida-pcie-core.o += -I$(src)/kernel/5.4/drivers/dma/dw-edma
+CFLAGS_akida-pcie-core.o += -I$(src)/akida-dw-edma
 
 obj-m := akida-pcie.o
 
