@@ -889,7 +889,7 @@ static int dw_edma_irq_request(struct dw_edma_chip *chip,
 	return err;
 }
 
-int dw_edma_probe(struct dw_edma_chip *chip)
+int akida_dw_edma_probe(struct dw_edma_chip *chip)
 {
 	struct device *dev;
 	struct dw_edma *dw;
@@ -966,9 +966,9 @@ err_irq_free:
 
 	return err;
 }
-EXPORT_SYMBOL_GPL(dw_edma_probe);
+EXPORT_SYMBOL_GPL(akida_dw_edma_probe);
 
-int dw_edma_remove(struct dw_edma_chip *chip)
+int akida_dw_edma_remove(struct dw_edma_chip *chip)
 {
 	struct dw_edma_chan *chan, *_chan;
 	struct device *dev = chip->dev;
@@ -1005,7 +1005,7 @@ int dw_edma_remove(struct dw_edma_chip *chip)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(dw_edma_remove);
+EXPORT_SYMBOL_GPL(akida_dw_edma_remove);
 
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("Synopsys DesignWare eDMA controller core driver");
