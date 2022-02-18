@@ -5,9 +5,12 @@ ifneq ($(KERNELRELEASE),)
 # The missing files are dw-edma-core.h and its dependencies.
 # This file is needed for the struct dw_edma_chip definition
 # passed to dw_edma_probe() and dw_edma_remove()
-CFLAGS_akida-pcie.o += -I$(src)/kernel/5.4/drivers/dma/dw-edma
+CFLAGS_akida-pcie-core.o += -I$(src)/kernel/5.4/drivers/dma/dw-edma
 
 obj-m := akida-pcie.o
+
+akida-pcie-y += akida-pcie-core.o
+
 
 else
 # normal makefile
