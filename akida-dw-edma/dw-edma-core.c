@@ -19,8 +19,8 @@
 
 #include "dw-edma-core.h"
 #include "dw-edma-v0-core.h"
-#include "../dmaengine.h"
-#include "../virt-dma.h"
+#include "dmaengine.h"
+#include "virt-dma.h"
 
 static inline
 struct device *dchan2dev(struct dma_chan *dchan)

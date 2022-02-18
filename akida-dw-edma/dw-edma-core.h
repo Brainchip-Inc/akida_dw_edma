@@ -12,7 +12,7 @@
 #include <linux/msi.h>
 #include <linux/dma/edma.h>
 
-#include "../virt-dma.h"
+#include "virt-dma.h"
 
 #define EDMA_LL_SZ					24
 #define EDMA_MAX_WR_CH					8
