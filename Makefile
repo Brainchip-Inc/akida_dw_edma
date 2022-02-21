@@ -5,16 +5,20 @@ ifneq ($(KERNELRELEASE),)
 # copied in kernel/x.y/ subdirectory depending on kernel API changes.
 # These files are drivers/dma/dmaengine.h and drivers/dma/virt-dma.h
 AKIDA_KERNEL_VERSION_RANK := $(shell \
-	printf "$(VERSION).$(PATCHLEVEL)\n5.4\n5.5\n" | \
+	printf "$(VERSION).$(PATCHLEVEL)\n5.4\n5.6\n5.7\n" | \
 	sort -V )
 
 ifneq ($(word 1,$(AKIDA_KERNEL_VERSION_RANK)), 5.4)
 $(error Kernel $(VERSION).$(PATCHLEVEL) too old)
 else
-ifneq ($(word 2,$(AKIDA_KERNEL_VERSION_RANK)), 5.5)
+ifneq ($(word 2,$(AKIDA_KERNEL_VERSION_RANK)), 5.6)
 ccflags-y += -I$(src)/kernel/5.4/drivers/dma
 else
+ifneq ($(word 3,$(AKIDA_KERNEL_VERSION_RANK)), 5.7)
+ccflags-y += -I$(src)/kernel/5.6/drivers/dma
+else
 $(error Kernel $(VERSION).$(PATCHLEVEL) not supported. Some incompatibilities can be present)
+endif
 endif
 endif
 
