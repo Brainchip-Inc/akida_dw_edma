@@ -65,27 +65,13 @@ static void akida_dma_callback(void *arg)
 }
 
 static int akida_dma_transfer(struct akida_dev *akida,
-	enum dma_transfer_direction direction, phys_addr_t dev_addr,
+	struct akida_dma_chan *dma_chan, phys_addr_t dev_addr,
 	size_t len, void *buf)
 {
 	struct dma_slave_config dma_sconfig = {0};
 	struct dma_async_tx_descriptor *txdesc;
 	struct device *chan_dev;
-	struct akida_dma_chan *dma_chan;
 	int ret;
-
-	/* Retreive channel according to direction */
-	switch (direction) {
-	case DMA_MEM_TO_DEV:
-		dma_chan = &akida->txchan;
-		break;
-	case DMA_DEV_TO_MEM:
-		dma_chan = &akida->rxchan;
-		break;
-	default:
-		pci_err(akida->pdev, "Unsupported direction (%d)\n", direction);
-		return -EINVAL;
-	}
 
 	/* Set parameters
 	 * DMA_MEM_TO_MEM is set as direction in order to be sure that the
@@ -218,7 +204,7 @@ static ssize_t akida_read(struct file *file, char __user *buf,
 			AKIDA_DMA_XFER_MAX_SIZE : left;
 
 		/* ... do transfer ... */
-		ret = akida_dma_transfer(akida, DMA_DEV_TO_MEM, *ppos, size, tmp);
+		ret = akida_dma_transfer(akida, &akida->rxchan, *ppos, size, tmp);
 		if (ret < 0)
 			goto end;
 
@@ -274,7 +260,7 @@ static ssize_t akida_write(struct file *file, const char __user *buf,
 		}
 
 		/* ... do transfer */
-		ret = akida_dma_transfer(akida, DMA_MEM_TO_DEV, *ppos, size, tmp);
+		ret = akida_dma_transfer(akida, &akida->txchan, *ppos, size, tmp);
 		if (ret < 0)
 			goto end;
 
