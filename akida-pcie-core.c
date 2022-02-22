@@ -36,28 +36,31 @@ static DEFINE_IDA(akida_devno);
 /* Maximum DMA transfer chunk size */
 #define AKIDA_DMA_XFER_MAX_SIZE  1024
 
-struct akida_dev {
-	struct pci_dev *pdev;
-	int devno;
-	struct miscdevice miscdev;
-	struct dw_edma_chip edma_chip;
-	struct dw_edma dw;
-	struct dma_chan *rxchan;
-	struct dma_chan *txchan;
-	struct dma_chan *dma_chan_using;
+struct akida_dma_chan {
+	struct dma_chan *chan;
 	struct completion dma_complete;
 	enum dma_data_direction dma_data_dir;
 	dma_addr_t dma_buf;
 	size_t dma_len;
 };
 
+struct akida_dev {
+	struct pci_dev *pdev;
+	int devno;
+	struct miscdevice miscdev;
+	struct dw_edma_chip edma_chip;
+	struct dw_edma dw;
+	struct akida_dma_chan rxchan;
+	struct akida_dma_chan txchan;
+};
+
 static void akida_dma_callback(void *arg)
 {
-	struct akida_dev *akida = arg;
+	struct akida_dma_chan *dma_chan = arg;
 
-	dma_unmap_single(akida->dma_chan_using->device->dev,
-		akida->dma_buf, akida->dma_len, akida->dma_data_dir);
-	complete(&akida->dma_complete);
+	dma_unmap_single(dma_chan->chan->device->dev,
+		dma_chan->dma_buf, dma_chan->dma_len, dma_chan->dma_data_dir);
+	complete(&dma_chan->dma_complete);
 }
 
 static int akida_dma_transfer(struct akida_dev *akida,
@@ -67,6 +70,7 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	struct dma_slave_config dma_sconfig = {0};
 	struct dma_async_tx_descriptor *txdesc;
 	struct device *chan_dev;
+	struct akida_dma_chan *dma_chan;
 
 	int ret;
 
@@ -79,14 +83,14 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	case DMA_MEM_TO_DEV:
 		dma_sconfig.dst_addr = dev_addr;
 		dma_sconfig.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-		akida->dma_chan_using = akida->txchan;
-		akida->dma_data_dir = DMA_TO_DEVICE;
+		dma_chan = &akida->txchan;
+		dma_chan->dma_data_dir = DMA_TO_DEVICE;
 		break;
 	case DMA_DEV_TO_MEM:
 		dma_sconfig.src_addr = dev_addr;
 		dma_sconfig.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-		akida->dma_chan_using = akida->rxchan;
-		akida->dma_data_dir = DMA_FROM_DEVICE;
+		dma_chan = &akida->rxchan;
+		dma_chan->dma_data_dir = DMA_FROM_DEVICE;
 		break;
 	default:
 		pci_err(akida->pdev, "Unsupported direction (%d)\n", direction);
@@ -94,11 +98,11 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	}
 
 	/* Map buffer */
-	akida->dma_len = len;
-	chan_dev = akida->dma_chan_using->device->dev;
-	akida->dma_buf = dma_map_single(chan_dev, buf, akida->dma_len,
-					akida->dma_data_dir);
-	if (dma_mapping_error(chan_dev, akida->dma_buf)) {
+	dma_chan->dma_len = len;
+	chan_dev = dma_chan->chan->device->dev;
+	dma_chan->dma_buf = dma_map_single(chan_dev, buf, dma_chan->dma_len,
+					   dma_chan->dma_data_dir);
+	if (dma_mapping_error(chan_dev, dma_chan->dma_buf)) {
 		pci_err(akida->pdev, "DMA mapping failed\n");
 		return -EINVAL;
 	}
@@ -113,19 +117,19 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	 * kernels with or without the modification.
 	 */
 	if (direction == DMA_MEM_TO_DEV)
-		dma_sconfig.src_addr = akida->dma_buf;
+		dma_sconfig.src_addr = dma_chan->dma_buf;
 	else
-		dma_sconfig.dst_addr = akida->dma_buf;
+		dma_sconfig.dst_addr = dma_chan->dma_buf;
 
-	ret = dmaengine_slave_config(akida->dma_chan_using, &dma_sconfig);
+	ret = dmaengine_slave_config(dma_chan->chan, &dma_sconfig);
 	if (ret < 0) {
 		pci_err(akida->pdev, "DMA slave config failed (%d)\n", ret);
 		goto err;
 	}
 
 	/* Prepare transaction */
-	txdesc = dmaengine_prep_slave_single(akida->dma_chan_using,
-					     akida->dma_buf, akida->dma_len,
+	txdesc = dmaengine_prep_slave_single(dma_chan->chan,
+					     dma_chan->dma_buf, dma_chan->dma_len,
 					     direction, DMA_PREP_INTERRUPT);
 	if (!txdesc) {
 		pci_err(akida->pdev, "Not able to get desc for DMA xfer\n");
@@ -134,11 +138,11 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	}
 
 	/* Clear completion */
-	reinit_completion(&akida->dma_complete);
+	reinit_completion(&dma_chan->dma_complete);
 
 	/* Submit transaction */
 	txdesc->callback = akida_dma_callback;
-	txdesc->callback_param = akida;
+	txdesc->callback_param = dma_chan;
 	ret = dma_submit_error(dmaengine_submit(txdesc));
 	if (ret < 0) {
 		pci_err(akida->pdev, "DMA submit failed\n");
@@ -146,14 +150,14 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	}
 
 	/* Start transactions */
-	dma_async_issue_pending(akida->dma_chan_using);
+	dma_async_issue_pending(dma_chan->chan);
 
 	/* Wait for completion */
-	ret = wait_for_completion_timeout(&akida->dma_complete,
+	ret = wait_for_completion_timeout(&dma_chan->dma_complete,
 					  msecs_to_jiffies(2000));
 	if (!ret) {
 		pci_err(akida->pdev, "DMA wait completion timed out\n");
-		dmaengine_terminate_all(akida->dma_chan_using);
+		dmaengine_terminate_all(dma_chan->chan);
 		ret = -ETIMEDOUT;
 		goto err;
 	}
@@ -162,8 +166,8 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	return 0;
 
 err:
-	dma_unmap_single(chan_dev, akida->dma_buf, akida->dma_len,
-			 akida->dma_data_dir);
+	dma_unmap_single(chan_dev, dma_chan->dma_buf, dma_chan->dma_len,
+			 dma_chan->dma_data_dir);
 	return ret;
 }
 
@@ -387,41 +391,43 @@ static int akida_dma_init(struct akida_dev *akida)
 
 	/* 1. Init rx channel */
 	p.dir_exp = BIT(DMA_DEV_TO_MEM);
-	akida->rxchan = dma_request_channel(mask, akida_dma_chan_filter, &p);
-	if (!akida->rxchan) {
+	akida->rxchan.chan = dma_request_channel(mask, akida_dma_chan_filter, &p);
+	if (!akida->rxchan.chan) {
 		pci_err(akida->pdev, "Request DMA rxchan fails\n");
 		goto err_exit;
 	}
 	module_put(akida->edma_chip.dev->driver->owner);
 
+	init_completion(&akida->rxchan.dma_complete);
+
 	/* 2. Init tx channel */
 	p.dir_exp = BIT(DMA_MEM_TO_DEV);
-	akida->txchan = dma_request_channel(mask, akida_dma_chan_filter, &p);
-	if (!akida->txchan)  {
+	akida->txchan.chan = dma_request_channel(mask, akida_dma_chan_filter, &p);
+	if (!akida->txchan.chan)  {
 		pci_err(akida->pdev, "Request DMA txchan fails\n");
 		goto free_rxchan;
 	}
 	module_put(akida->edma_chip.dev->driver->owner);
 
-	init_completion(&akida->dma_complete);
+	init_completion(&akida->txchan.dma_complete);
 
 	return 0;
 
 free_rxchan:
-	dma_release_channel(akida->rxchan);
+	dma_release_channel(akida->rxchan.chan);
 err_exit:
 	return -EBUSY;
 }
 
 static void akida_dma_exit(struct akida_dev *akida)
 {
-	dmaengine_terminate_sync(akida->txchan);
+	dmaengine_terminate_sync(akida->txchan.chan);
 	__module_get(akida->edma_chip.dev->driver->owner);
-	dma_release_channel(akida->txchan);
+	dma_release_channel(akida->txchan.chan);
 
-	dmaengine_terminate_sync(akida->rxchan);
+	dmaengine_terminate_sync(akida->rxchan.chan);
 	__module_get(akida->edma_chip.dev->driver->owner);
-	dma_release_channel(akida->rxchan);
+	dma_release_channel(akida->rxchan.chan);
 }
 
 static int akida_dw_edma_pcie_irq_vector(struct device *dev, unsigned int nr)
