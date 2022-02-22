@@ -39,6 +39,7 @@ static DEFINE_IDA(akida_devno);
 struct akida_dma_chan {
 	struct dma_chan *chan;
 	struct completion dma_complete;
+	enum dma_transfer_direction dma_xfer_dir;
 	enum dma_data_direction dma_data_dir;
 	dma_addr_t dma_buf;
 	size_t dma_len;
@@ -71,29 +72,38 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	struct dma_async_tx_descriptor *txdesc;
 	struct device *chan_dev;
 	struct akida_dma_chan *dma_chan;
-
 	int ret;
+
+	/* Retreive channel according to direction */
+	switch (direction) {
+	case DMA_MEM_TO_DEV:
+		dma_chan = &akida->txchan;
+		break;
+	case DMA_DEV_TO_MEM:
+		dma_chan = &akida->rxchan;
+		break;
+	default:
+		pci_err(akida->pdev, "Unsupported direction (%d)\n", direction);
+		return -EINVAL;
+	}
 
 	/* Set parameters
 	 * DMA_MEM_TO_MEM is set as direction in order to be sure that the
 	 * dw-edma engine will worked in remote initiator mode.
 	 */
 	dma_sconfig.direction = DMA_MEM_TO_MEM;
-	switch (direction) {
+	switch (dma_chan->dma_xfer_dir) {
 	case DMA_MEM_TO_DEV:
 		dma_sconfig.dst_addr = dev_addr;
 		dma_sconfig.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-		dma_chan = &akida->txchan;
-		dma_chan->dma_data_dir = DMA_TO_DEVICE;
 		break;
 	case DMA_DEV_TO_MEM:
 		dma_sconfig.src_addr = dev_addr;
 		dma_sconfig.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-		dma_chan = &akida->rxchan;
-		dma_chan->dma_data_dir = DMA_FROM_DEVICE;
 		break;
 	default:
-		pci_err(akida->pdev, "Unsupported direction (%d)\n", direction);
+		pci_err(akida->pdev, "Unsupported direction (%d)\n",
+			dma_chan->dma_xfer_dir);
 		return -EINVAL;
 	}
 
@@ -116,7 +126,7 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	 * We set here some src_addr/dst_addr address to be compliant with
 	 * kernels with or without the modification.
 	 */
-	if (direction == DMA_MEM_TO_DEV)
+	if (dma_chan->dma_xfer_dir == DMA_MEM_TO_DEV)
 		dma_sconfig.src_addr = dma_chan->dma_buf;
 	else
 		dma_sconfig.dst_addr = dma_chan->dma_buf;
@@ -130,7 +140,8 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	/* Prepare transaction */
 	txdesc = dmaengine_prep_slave_single(dma_chan->chan,
 					     dma_chan->dma_buf, dma_chan->dma_len,
-					     direction, DMA_PREP_INTERRUPT);
+					     dma_chan->dma_xfer_dir,
+					     DMA_PREP_INTERRUPT);
 	if (!txdesc) {
 		pci_err(akida->pdev, "Not able to get desc for DMA xfer\n");
 		ret = -EINVAL;
@@ -400,6 +411,10 @@ static int akida_dma_init(struct akida_dev *akida)
 
 	init_completion(&akida->rxchan.dma_complete);
 
+	akida->rxchan.dma_xfer_dir = DMA_DEV_TO_MEM;
+	akida->rxchan.dma_data_dir = DMA_FROM_DEVICE;
+
+
 	/* 2. Init tx channel */
 	p.dir_exp = BIT(DMA_MEM_TO_DEV);
 	akida->txchan.chan = dma_request_channel(mask, akida_dma_chan_filter, &p);
@@ -410,6 +425,9 @@ static int akida_dma_init(struct akida_dev *akida)
 	module_put(akida->edma_chip.dev->driver->owner);
 
 	init_completion(&akida->txchan.dma_complete);
+
+	akida->txchan.dma_xfer_dir = DMA_MEM_TO_DEV;
+	akida->txchan.dma_data_dir = DMA_TO_DEVICE;
 
 	return 0;
 
