@@ -33,6 +33,9 @@ static DEFINE_IDA(akida_devno);
 #define AKIDA_DMA_RAM_PHY_DT_SIZE(i)    0xC0000
 #define AKIDA_DMA_RAM_PHY_SIZE	0x00400000 /* 4MB */
 
+/* Maximum DMA transfer chunk size */
+#define AKIDA_DMA_XFER_MAX_SIZE  1024
+
 struct akida_dev {
 	struct pci_dev *pdev;
 	int devno;
@@ -178,6 +181,9 @@ static ssize_t akida_read(struct file *file, char __user *buf,
 		container_of(file->private_data, struct akida_dev, miscdev);
 	void *tmp;
 	ssize_t ret;
+	size_t left;
+	size_t size;
+	char __user *usr_buf;
 
 	if (!akida_is_allowed(*ppos, sz)) {
 		pci_err(akida->pdev, "dma transfer @0x%llx, %zu bytes not allowed\n",
@@ -185,22 +191,34 @@ static ssize_t akida_read(struct file *file, char __user *buf,
 		return -EINVAL;
 	}
 
-	tmp = kmalloc(sz, GFP_KERNEL);
+	tmp = kmalloc(AKIDA_DMA_XFER_MAX_SIZE, GFP_KERNEL);
 	if (tmp == NULL)
 		return -ENOMEM;
 
-	ret = akida_dma_transfer(akida, DMA_DEV_TO_MEM, *ppos, sz, tmp);
-	if (ret < 0)
-		goto end;
+	left = sz;
+	usr_buf = buf;
+	while (left) {
+		/* Limit transfer chunk ... */
+		size = left > AKIDA_DMA_XFER_MAX_SIZE ?
+			AKIDA_DMA_XFER_MAX_SIZE : left;
 
-	if (copy_to_user(buf, tmp, sz)) {
-		ret = -EFAULT;
-		goto end;
+		/* ... do transfer ... */
+		ret = akida_dma_transfer(akida, DMA_DEV_TO_MEM, *ppos, size, tmp);
+		if (ret < 0)
+			goto end;
+
+		/* ... copy transfered chunk to the user buffer */
+		if (copy_to_user(usr_buf, tmp, size)) {
+			ret = -EFAULT;
+			goto end;
+		}
+
+		*ppos += size;
+		usr_buf += size;
+		left -= size;
 	}
 
-	*ppos += sz;
 	ret = sz;
-
 end:
 	kfree(tmp);
 	return ret;
@@ -213,6 +231,9 @@ static ssize_t akida_write(struct file *file, const char __user *buf,
 		container_of(file->private_data, struct akida_dev, miscdev);
 	void *tmp;
 	ssize_t ret;
+	size_t left;
+	size_t size;
+	const char __user *usr_buf;
 
 	if (!akida_is_allowed(*ppos, sz)) {
 		pci_err(akida->pdev, "dma transfer @0x%llx, %zu bytes not allowed\n",
@@ -220,15 +241,33 @@ static ssize_t akida_write(struct file *file, const char __user *buf,
 		return -EINVAL;
 	}
 
-	tmp = memdup_user(buf, sz);
-	if (IS_ERR(tmp))
-		return PTR_ERR(tmp);
+	tmp = kmalloc(AKIDA_DMA_XFER_MAX_SIZE, GFP_KERNEL);
+	if (tmp == NULL)
+		return -ENOMEM;
 
-	ret = akida_dma_transfer(akida, DMA_MEM_TO_DEV, *ppos, sz, tmp);
-	if (ret < 0)
-		goto end;
+	left = sz;
+	usr_buf = buf;
+	while (left) {
+		/* Limit transfer chunk ... */
+		size = left > AKIDA_DMA_XFER_MAX_SIZE ?
+			AKIDA_DMA_XFER_MAX_SIZE : left;
 
-	*ppos += sz;
+		/* ... copy chunk from the user buffer ... */
+		if (copy_from_user(tmp, usr_buf, size)) {
+			ret = -EFAULT;
+			goto end;
+		}
+
+		/* ... do transfer */
+		ret = akida_dma_transfer(akida, DMA_MEM_TO_DEV, *ppos, size, tmp);
+		if (ret < 0)
+			goto end;
+
+		*ppos += size;
+		usr_buf += size;
+		left -= size;
+	}
+
 	ret = sz;
 
 end:
