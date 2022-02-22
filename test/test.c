@@ -54,18 +54,18 @@ static int test1(int fd)
 
 static int test2(int fd)
 {
-#define TEST_BUFFER_SIZE 32
-	uint8_t buff[2][TEST_BUFFER_SIZE];
+#define TEST2_BUFFER_SIZE 32
+	uint8_t buff[2][TEST2_BUFFER_SIZE];
 	size_t size;
 	off_t offset;
 	ssize_t ssize;
 	int err;
 
-	for (size = 0; size < TEST_BUFFER_SIZE; size++) {
+	for (size = 0; size < TEST2_BUFFER_SIZE; size++) {
 		buff[0][size] = size;
 	}
 
-	size = TEST_BUFFER_SIZE;
+	size = TEST2_BUFFER_SIZE;
 	offset = 0x20400000;
 	ssize = pwrite(fd, buff[0], size, offset);
 	if (ssize < 0) {
@@ -83,7 +83,7 @@ static int test2(int fd)
 	printf("Wr @0x%04lx, %zu\n", offset, size);
 	display_buffer("  ", buff[0], size);
 
-	size = TEST_BUFFER_SIZE;
+	size = TEST2_BUFFER_SIZE;
 	offset = 0x20400000;
 	ssize = pread(fd, buff[1], size, offset);
 	if (ssize < 0) {
@@ -101,7 +101,7 @@ static int test2(int fd)
 	printf("Rd @0x%04lx, %zu\n", offset, size);
 	display_buffer("  ", buff[1], size);
 
-	for (size = 0; size < TEST_BUFFER_SIZE; size++) {
+	for (size = 0; size < TEST2_BUFFER_SIZE; size++) {
 		if (buff[0][size] != buff[1][size]) {
 			printf("Mismatch at offset %zu\n",size);
 			return EILSEQ;
