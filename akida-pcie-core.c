@@ -94,7 +94,7 @@ static int akida_dma_transfer(struct akida_dev *akida,
 	akida->dma_len = len;
 	chan_dev = akida->dma_chan_using->device->dev;
 	akida->dma_buf = dma_map_single(chan_dev, buf, akida->dma_len,
-				        akida->dma_data_dir);
+					akida->dma_data_dir);
 	if (dma_mapping_error(chan_dev, akida->dma_buf)) {
 		pci_err(akida->pdev, "DMA mapping failed\n");
 		return -EINVAL;
@@ -320,7 +320,7 @@ static bool akida_dma_chan_filter(struct dma_chan *chan, void *param)
 	struct dma_slave_caps caps;
 	int ret;
 
-	/* Check the the engine used is the one we have instanciate */
+	/* Check that the engine used is the one we have instanciate */
 	if (&p->akida->pdev->dev != chan->device->dev)
 		return false;
 
@@ -626,7 +626,7 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		goto fail_ida_alloc;
 	}
 
-	pci_info(pdev,"probed (%s)\n", akida->miscdev.name);
+	pci_info(pdev, "probed (%s)\n", akida->miscdev.name);
 
 	return 0;
 
@@ -655,8 +655,7 @@ static void akida_remove(struct pci_dev *pdev)
 	pci_free_irq_vectors(pdev);
 
 
-	pci_info(pdev,"removed\n");
-	return;
+	pci_info(pdev, "removed\n");
 }
 
 #ifndef PCI_VENDOR_ID_BRAINCHIP
