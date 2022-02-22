@@ -11,6 +11,8 @@
 #include <string.h>
 #include <errno.h>
 #include <stdint.h>
+#include <inttypes.h>
+
 
 static void display_buffer(const char *msg, uint8_t *buff, size_t size)
 {
@@ -112,6 +114,68 @@ static int test2(int fd)
 	return 0;
 }
 
+static int test3(int fd)
+{
+#define TEST3_BUFFER_SIZE (1*1024*1024/sizeof(uint32_t))
+	uint32_t buff[2][TEST3_BUFFER_SIZE];
+	size_t size;
+	off_t offset;
+	ssize_t ssize;
+	int err;
+
+	for (size = 0; size < TEST3_BUFFER_SIZE; size++) {
+		buff[0][size] = size;
+	}
+
+	size = TEST3_BUFFER_SIZE * sizeof(buff[0][0]);
+	offset = 0x20400000;
+	ssize = pwrite(fd, buff[0], size, offset);
+	if (ssize < 0) {
+		err = errno;
+		fprintf(stderr,"pwrite(%zu,0x%lx) failed (%d-%s)\n",
+			size, offset, err, strerror(err));
+		return err;
+	}
+	if ( (size_t)ssize != size) {
+		fprintf(stderr,"pwrite(%zu,0x%lx) returns %zd)\n",
+			size, offset, ssize);
+		return ECANCELED;
+	}
+
+	printf("Wr @0x%04lx, %zu\n", offset, size);
+
+	size = TEST3_BUFFER_SIZE * sizeof(buff[1][0]);
+	offset = 0x20400000;
+	ssize = pread(fd, buff[1], size, offset);
+	if (ssize < 0) {
+		err = errno;
+		fprintf(stderr,"pread(%zu,0x%lx) failed (%d-%s)\n",
+			size, offset, err, strerror(err));
+		return err;
+	}
+	if ( (size_t)ssize != size) {
+		fprintf(stderr,"pread(%zu,0x%lx) returns %zd)\n",
+			size, offset, ssize);
+		return ECANCELED;
+	}
+
+	printf("Rd @0x%04lx, %zu\n", offset, size);
+
+	for (size = 0; size < TEST3_BUFFER_SIZE; size++) {
+		if (buff[0][size] != buff[1][size]) {
+			printf("Mismatch at offset %zu (read 0x%04"PRIx16", exp 0x%04"PRIx16"\n",
+				size,
+				buff[1][size],
+				buff[0][size]);
+			return EILSEQ;
+		}
+	}
+	printf("Data ok\n");
+
+	return 0;
+}
+
+
 int main(int argc, char* argv[])
 {
 	const struct test_def {
@@ -120,6 +184,7 @@ int main(int argc, char* argv[])
 	} tab_test[] = {
 		{"test1", test1},
 		{"test2", test2},
+		{"test3", test3},
 		{0}
 	}, *test;
 	const char *devpath;
