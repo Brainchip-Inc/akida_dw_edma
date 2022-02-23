@@ -240,7 +240,7 @@ end:
 	return &p->err;
 }
 
-static int test4(int fd, int is_verbose, const char *devpath, off_t test_area)
+static int test_multithread(int fd, int is_verbose, const char *devpath, off_t test_area, unsigned int nb_loop)
 {
 	struct thread_param p[2] = {0};
 	pthread_t thread_id[2];
@@ -261,7 +261,7 @@ static int test4(int fd, int is_verbose, const char *devpath, off_t test_area)
 	p[0].fd = fd;
 	p[0].is_verbose = is_verbose;
 	p[0].test_area = test_area;
-	p[0].nb_loop = 10;
+	p[0].nb_loop = nb_loop;
 	p[0].is_verbose = is_verbose;
 	p[0].err = EINPROGRESS;
 
@@ -270,7 +270,7 @@ static int test4(int fd, int is_verbose, const char *devpath, off_t test_area)
 	p[1].fd = fd1;
 	p[1].is_verbose = is_verbose;
 	p[1].test_area = test_area + 1*1024*1024; /* Do not overlap with other thread */
-	p[1].nb_loop = 10;
+	p[1].nb_loop = nb_loop;
 	p[1].is_verbose = is_verbose;
 	p[1].err = EINPROGRESS;
 
@@ -311,6 +311,15 @@ end:
 	return err;
 }
 
+static int test4(int fd, int is_verbose, const char *devpath, off_t test_area)
+{
+	return test_multithread(fd, is_verbose, devpath, test_area, 10);
+}
+
+static int test5(int fd, int is_verbose, const char *devpath, off_t test_area)
+{
+	return test_multithread(fd, 0, devpath, test_area, 100);
+}
 
 int main(int argc, char* argv[])
 {
@@ -322,6 +331,7 @@ int main(int argc, char* argv[])
 		{"test2", test2},
 		{"test3", test3},
 		{"test4", test4},
+		{"test5", test5},
 		{0}
 	}, *test;
 	const char *devpath;
