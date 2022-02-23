@@ -53,8 +53,8 @@ struct akida_dev {
 	struct miscdevice miscdev;
 	struct dw_edma_chip edma_chip;
 	struct dw_edma dw;
-	struct akida_dma_chan rxchan;
-	struct akida_dma_chan txchan;
+	struct akida_dma_chan rxchan[2];
+	struct akida_dma_chan txchan[2];
 	wait_queue_head_t wq_rxchan;
 	wait_queue_head_t wq_txchan;
 };
@@ -179,13 +179,30 @@ static bool akida_is_allowed(phys_addr_t addr, size_t size)
 		addr >= (AKIDA_DMA_RAM_PHY_ADDR + AKIDA_DMA_RAM_PHY_SIZE);
 }
 
-static struct akida_dma_chan *akida_acquire_chan(wait_queue_head_t *wq, struct akida_dma_chan *chan)
+static struct akida_dma_chan *akida_get_unsused_chan(
+					struct akida_dma_chan *tab_chan,
+					unsigned int nb_chan)
 {
+	unsigned int i;
+
+	for (i = 0; i < nb_chan; i++) {
+		if (!(tab_chan+i)->is_used)
+			return tab_chan+i;
+	}
+	return NULL;
+}
+
+static struct akida_dma_chan *akida_acquire_chan(wait_queue_head_t *wq,
+					struct akida_dma_chan *tab_chan,
+					unsigned int nb_chan)
+{
+	struct akida_dma_chan *chan;
 	int ret;
 
 	spin_lock(&wq->lock);
 
-	ret = wait_event_interruptible_locked(*wq, !chan->is_used);
+	ret = wait_event_interruptible_locked(*wq,
+		(chan = akida_get_unsused_chan(tab_chan, nb_chan)));
 	if (ret) {
 		spin_unlock(&wq->lock);
 		return ERR_PTR(ret);
@@ -208,7 +225,8 @@ static void akida_release_chan(wait_queue_head_t *wq, struct akida_dma_chan *cha
 
 static inline struct akida_dma_chan *akida_acquire_rxchan(struct akida_dev *akida)
 {
-	return akida_acquire_chan(&akida->wq_rxchan, &akida->rxchan);
+	return akida_acquire_chan(&akida->wq_rxchan, akida->rxchan,
+				  ARRAY_SIZE(akida->rxchan));
 }
 
 static inline void akida_release_rxchan(struct akida_dev *akida, struct akida_dma_chan *rxchan)
@@ -218,7 +236,8 @@ static inline void akida_release_rxchan(struct akida_dev *akida, struct akida_dm
 
 static inline struct akida_dma_chan *akida_acquire_txchan(struct akida_dev *akida)
 {
-	return akida_acquire_chan(&akida->wq_txchan, &akida->txchan);
+	return akida_acquire_chan(&akida->wq_txchan, akida->txchan,
+				  ARRAY_SIZE(akida->txchan));
 }
 
 static inline void akida_release_txchan(struct akida_dev *akida, struct akida_dma_chan *txchan)
@@ -446,6 +465,7 @@ static int akida_dma_init(struct akida_dev *akida)
 {
 	struct akida_filter_param p;
 	dma_cap_mask_t mask;
+	unsigned int i;
 
 	dma_cap_zero(mask);
 	dma_cap_set(DMA_SLAVE, mask);
@@ -453,52 +473,77 @@ static int akida_dma_init(struct akida_dev *akida)
 	p.akida = akida;
 	p.dir_mask = BIT(DMA_DEV_TO_MEM) | BIT(DMA_MEM_TO_DEV);
 
-	/* 1. Init rx channel */
-	p.dir_exp = BIT(DMA_DEV_TO_MEM);
-	akida->rxchan.chan = dma_request_channel(mask, akida_dma_chan_filter, &p);
-	if (!akida->rxchan.chan) {
-		pci_err(akida->pdev, "Request DMA rxchan fails\n");
-		goto err_exit;
+	/* 1. Init rx channels */
+	for (i = 0; i < ARRAY_SIZE(akida->rxchan); i++) {
+		p.dir_exp = BIT(DMA_DEV_TO_MEM);
+		akida->rxchan[i].chan = dma_request_channel(mask,
+						akida_dma_chan_filter, &p);
+		if (!akida->rxchan[i].chan) {
+			pci_err(akida->pdev, "Request DMA rxchan[%u] fails\n",
+				i);
+			goto free_rxchan;
+		}
+		module_put(akida->edma_chip.dev->driver->owner);
+
+		init_completion(&akida->rxchan[i].dma_complete);
+
+		akida->rxchan[i].dma_xfer_dir = DMA_DEV_TO_MEM;
+		akida->rxchan[i].dma_data_dir = DMA_FROM_DEVICE;
 	}
-	module_put(akida->edma_chip.dev->driver->owner);
-
-	init_completion(&akida->rxchan.dma_complete);
-
-	akida->rxchan.dma_xfer_dir = DMA_DEV_TO_MEM;
-	akida->rxchan.dma_data_dir = DMA_FROM_DEVICE;
 
 
-	/* 2. Init tx channel */
-	p.dir_exp = BIT(DMA_MEM_TO_DEV);
-	akida->txchan.chan = dma_request_channel(mask, akida_dma_chan_filter, &p);
-	if (!akida->txchan.chan)  {
-		pci_err(akida->pdev, "Request DMA txchan fails\n");
-		goto free_rxchan;
+	/* 2. Init tx channels */
+	for (i = 0; i < ARRAY_SIZE(akida->txchan); i++) {
+		p.dir_exp = BIT(DMA_MEM_TO_DEV);
+		akida->txchan[i].chan = dma_request_channel(mask,
+						akida_dma_chan_filter, &p);
+		if (!akida->txchan[i].chan)  {
+			pci_err(akida->pdev, "Request DMA txchan[%u] fails\n",
+				i);
+			goto free_txchan;
+		}
+		module_put(akida->edma_chip.dev->driver->owner);
+
+		init_completion(&akida->txchan[i].dma_complete);
+
+		akida->txchan[i].dma_xfer_dir = DMA_MEM_TO_DEV;
+		akida->txchan[i].dma_data_dir = DMA_TO_DEVICE;
 	}
-	module_put(akida->edma_chip.dev->driver->owner);
-
-	init_completion(&akida->txchan.dma_complete);
-
-	akida->txchan.dma_xfer_dir = DMA_MEM_TO_DEV;
-	akida->txchan.dma_data_dir = DMA_TO_DEVICE;
 
 	return 0;
 
+free_txchan:
+	for (i = 0; i < ARRAY_SIZE(akida->txchan); i++) {
+		if (akida->txchan[i].chan) {
+			__module_get(akida->edma_chip.dev->driver->owner);
+			dma_release_channel(akida->txchan[i].chan);
+		}
+	}
 free_rxchan:
-	dma_release_channel(akida->rxchan.chan);
-err_exit:
+	for (i = 0; i < ARRAY_SIZE(akida->rxchan); i++) {
+		if (akida->rxchan[i].chan) {
+			__module_get(akida->edma_chip.dev->driver->owner);
+			dma_release_channel(akida->rxchan[i].chan);
+		}
+	}
 	return -EBUSY;
 }
 
 static void akida_dma_exit(struct akida_dev *akida)
 {
-	dmaengine_terminate_sync(akida->txchan.chan);
-	__module_get(akida->edma_chip.dev->driver->owner);
-	dma_release_channel(akida->txchan.chan);
+	unsigned int i;
 
-	dmaengine_terminate_sync(akida->rxchan.chan);
-	__module_get(akida->edma_chip.dev->driver->owner);
-	dma_release_channel(akida->rxchan.chan);
+	for (i = 0; i < ARRAY_SIZE(akida->txchan); i++) {
+		dmaengine_terminate_sync(akida->txchan[i].chan);
+		__module_get(akida->edma_chip.dev->driver->owner);
+		dma_release_channel(akida->txchan[i].chan);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(akida->rxchan); i++) {
+		dmaengine_terminate_sync(akida->rxchan[i].chan);
+		__module_get(akida->edma_chip.dev->driver->owner);
+		dma_release_channel(akida->rxchan[i].chan);
+	}
 }
 
 static int akida_dw_edma_pcie_irq_vector(struct device *dev, unsigned int nr)
