@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <pthread.h>
 
 
 static void display_buffer(const char *msg, uint8_t *buff, size_t size)
@@ -186,6 +187,128 @@ static int test3(int fd, int is_verbose, const char *devpath, off_t test_area)
 }
 
 
+struct thread_param {
+	const char *name;
+	const char *devpath;
+	int fd;
+	int is_verbose;
+	off_t test_area;
+	unsigned int nb_loop;
+	int err;
+};
+
+void *thread_fct(void *arg)
+{
+	const struct test_def {
+		const char *name;
+		int (*tst_fct)(int fd, int is_verbose, const char *devname, off_t test_area);
+	} tab_test[] = {
+		{"test2 0", test2},
+		{"test2 1", test2},
+		{"test3", test3},
+		{0}
+	}, *test;
+	struct thread_param *p = arg;
+	unsigned int loop;
+	int err;
+
+	for (loop = 0; loop < p->nb_loop; loop++) {
+
+		test = tab_test;
+		do {
+			if (p->is_verbose)
+				printf("%s: loop %u, run %s ...\n", p->name, loop, test->name);
+			err = test->tst_fct(p->fd, 0, p->devpath, p->test_area);
+			if (err)  {
+				fprintf(stderr, "%s: loop %u, run %s failed\n",
+					p->name, loop, test->name);
+				goto end;
+			}
+
+			if (p->is_verbose)
+				printf("%s: loop %u, run %s ok\n", p->name, loop, test->name);
+		} while ((++test)->name);
+	}
+
+	err = 0;
+
+end:
+	p->err = err;
+	return &p->err;
+}
+
+static int test4(int fd, int is_verbose, const char *devpath, off_t test_area)
+{
+	struct thread_param p[2] = {0};
+	pthread_t thread_id[2];
+	int fd1;
+	int err, err2;
+	int i, j;
+
+	fd1 = open(devpath, O_RDWR | O_NONBLOCK);
+	if (fd1 < 0) {
+		err = errno;
+		fprintf(stderr,"open(%s) failed (%d-%s)\n",
+			devpath, err, strerror(err));
+		return err;
+	}
+
+	p[0].name = "thread0";
+	p[0].devpath = devpath;
+	p[0].fd = fd;
+	p[0].is_verbose = is_verbose;
+	p[0].test_area = test_area;
+	p[0].nb_loop = 10;
+	p[0].is_verbose = is_verbose;
+	p[0].err = EINPROGRESS;
+
+	p[1].name = "thread1";
+	p[1].devpath = devpath;
+	p[1].fd = fd1;
+	p[1].is_verbose = is_verbose;
+	p[1].test_area = test_area + 1*1024*1024; /* Do not overlap with other thread */
+	p[1].nb_loop = 10;
+	p[1].is_verbose = is_verbose;
+	p[1].err = EINPROGRESS;
+
+	for (i = 0; i < 2; i++) {
+		err = pthread_create(&thread_id[i], NULL, thread_fct, &p[i]);
+		if (err) {
+			fprintf(stderr,"pthread_create(%d) failed (%d-%s)\n",
+				i, err, strerror(err));
+			for (j = 0; j < i; j++)
+				pthread_join(thread_id[j], NULL);
+			goto end;
+		}
+	}
+
+	err = 0;
+	for (i = 0; i < 2; i++) {
+		err2 = pthread_join(thread_id[i], NULL);
+		if (err2) {
+			fprintf(stderr,"pthread_join(%d) failed (%d-%s)\n",
+				i, err2, strerror(err2));
+			if (!err)
+				err = err2;
+		}
+	}
+	if (err)
+		goto end;
+
+	err = 0;
+	for (i = 0; i < 2; i++) {
+		if (p[i].err) {
+			err = p[i].err;
+			goto end;
+		}
+	}
+
+end:
+	close(fd1);
+	return err;
+}
+
+
 int main(int argc, char* argv[])
 {
 	const struct test_def {
@@ -195,6 +318,7 @@ int main(int argc, char* argv[])
 		{"test1", test1},
 		{"test2", test2},
 		{"test3", test3},
+		{"test4", test4},
 		{0}
 	}, *test;
 	const char *devpath;
