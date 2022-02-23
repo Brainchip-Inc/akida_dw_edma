@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS ?= -Wall -Wextra -Werror
+CFLAGS ?= -Wall -Wextra -Werror -Wno-unused-parameter
 
 ifeq ($(V),)
 Q := @

@@ -25,7 +25,7 @@ static void display_buffer(const char *msg, uint8_t *buff, size_t size)
 	printf("\n");
 }
 
-static int test1(int fd)
+static int test1(int fd, int is_verbose, const char *devpath, off_t test_area)
 {
 	uint8_t buff[8];
 	size_t size;
@@ -48,13 +48,15 @@ static int test1(int fd)
 		return ECANCELED;
 	}
 
-	printf("Rd @0x%04lx, %zu\n", offset, size);
-	display_buffer("  ", buff, size);
+	if (is_verbose) {
+		printf("Rd @0x%04lx, %zu\n", offset, size);
+		display_buffer("  ", buff, size);
+	}
 
 	return 0;
 }
 
-static int test2(int fd)
+static int test2(int fd, int is_verbose, const char *devpath, off_t test_area)
 {
 #define TEST2_BUFFER_SIZE 32
 	uint8_t buff[2][TEST2_BUFFER_SIZE];
@@ -68,7 +70,7 @@ static int test2(int fd)
 	}
 
 	size = TEST2_BUFFER_SIZE;
-	offset = 0x20400000;
+	offset = test_area;
 	ssize = pwrite(fd, buff[0], size, offset);
 	if (ssize < 0) {
 		err = errno;
@@ -82,11 +84,13 @@ static int test2(int fd)
 		return ECANCELED;
 	}
 
-	printf("Wr @0x%04lx, %zu\n", offset, size);
-	display_buffer("  ", buff[0], size);
+	if (is_verbose) {
+		printf("Wr @0x%04lx, %zu\n", offset, size);
+		display_buffer("  ", buff[0], size);
+	}
 
 	size = TEST2_BUFFER_SIZE;
-	offset = 0x20400000;
+	offset = test_area;
 	ssize = pread(fd, buff[1], size, offset);
 	if (ssize < 0) {
 		err = errno;
@@ -100,8 +104,10 @@ static int test2(int fd)
 		return ECANCELED;
 	}
 
-	printf("Rd @0x%04lx, %zu\n", offset, size);
-	display_buffer("  ", buff[1], size);
+	if (is_verbose) {
+		printf("Rd @0x%04lx, %zu\n", offset, size);
+		display_buffer("  ", buff[1], size);
+	}
 
 	for (size = 0; size < TEST2_BUFFER_SIZE; size++) {
 		if (buff[0][size] != buff[1][size]) {
@@ -109,12 +115,13 @@ static int test2(int fd)
 			return EILSEQ;
 		}
 	}
-	printf("Data ok\n");
+	if (is_verbose)
+		printf("Data ok\n");
 
 	return 0;
 }
 
-static int test3(int fd)
+static int test3(int fd, int is_verbose, const char *devpath, off_t test_area)
 {
 #define TEST3_BUFFER_SIZE (1*1024*1024/sizeof(uint32_t))
 	uint32_t buff[2][TEST3_BUFFER_SIZE];
@@ -128,7 +135,7 @@ static int test3(int fd)
 	}
 
 	size = TEST3_BUFFER_SIZE * sizeof(buff[0][0]);
-	offset = 0x20400000;
+	offset = test_area;
 	ssize = pwrite(fd, buff[0], size, offset);
 	if (ssize < 0) {
 		err = errno;
@@ -142,10 +149,11 @@ static int test3(int fd)
 		return ECANCELED;
 	}
 
-	printf("Wr @0x%04lx, %zu\n", offset, size);
+	if (is_verbose)
+		printf("Wr @0x%04lx, %zu\n", offset, size);
 
 	size = TEST3_BUFFER_SIZE * sizeof(buff[1][0]);
-	offset = 0x20400000;
+	offset = test_area;
 	ssize = pread(fd, buff[1], size, offset);
 	if (ssize < 0) {
 		err = errno;
@@ -159,7 +167,8 @@ static int test3(int fd)
 		return ECANCELED;
 	}
 
-	printf("Rd @0x%04lx, %zu\n", offset, size);
+	if (is_verbose)
+		printf("Rd @0x%04lx, %zu\n", offset, size);
 
 	for (size = 0; size < TEST3_BUFFER_SIZE; size++) {
 		if (buff[0][size] != buff[1][size]) {
@@ -170,7 +179,8 @@ static int test3(int fd)
 			return EILSEQ;
 		}
 	}
-	printf("Data ok\n");
+	if (is_verbose)
+		printf("Data ok\n");
 
 	return 0;
 }
@@ -180,7 +190,7 @@ int main(int argc, char* argv[])
 {
 	const struct test_def {
 		const char *name;
-		int (*tst_fct)(int fd);
+		int (*tst_fct)(int fd, int is_verbose, const char *devname, off_t test_area);
 	} tab_test[] = {
 		{"test1", test1},
 		{"test2", test2},
@@ -213,7 +223,7 @@ int main(int argc, char* argv[])
 	test = tab_test;
 	do {
 		printf("-- %s\n", test->name);
-		err = test->tst_fct(fd);
+		err = test->tst_fct(fd, 1, devpath, 0x20400000);
 		printf("-- %s %s\n", test->name, err ? "FAILED" : "ok");
 		if (err)
 			failed++;
