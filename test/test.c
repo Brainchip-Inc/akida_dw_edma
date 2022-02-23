@@ -240,19 +240,33 @@ end:
 	return &p->err;
 }
 
-static int test_multithread(int fd, int is_verbose, const char *devpath, off_t test_area, unsigned int nb_loop)
+static int test_multithread(int fd, int is_verbose, const char *devpath, off_t test_area, unsigned int nb_loop, unsigned int nb_thread)
 {
-	struct thread_param p[2] = {0};
-	pthread_t thread_id[2];
-	int fd1;
+	struct thread_param p[3] = {0};
+	pthread_t thread_id[3];
+	int fd1, fd2;
 	int err, err2;
-	int i, j;
+	unsigned int i, j;
+
+	if (nb_thread > 3) {
+		fprintf(stderr,"nb_thread=%u not supported\n", nb_thread);
+		return EINVAL;
+	}
 
 	fd1 = open(devpath, O_RDWR | O_NONBLOCK);
 	if (fd1 < 0) {
 		err = errno;
 		fprintf(stderr,"open(%s) failed (%d-%s)\n",
 			devpath, err, strerror(err));
+		return err;
+	}
+
+	fd2 = open(devpath, O_RDWR | O_NONBLOCK);
+	if (fd2 < 0) {
+		err = errno;
+		fprintf(stderr,"open(%s) failed (%d-%s)\n",
+			devpath, err, strerror(err));
+		close(fd1);
 		return err;
 	}
 
@@ -274,7 +288,16 @@ static int test_multithread(int fd, int is_verbose, const char *devpath, off_t t
 	p[1].is_verbose = is_verbose;
 	p[1].err = EINPROGRESS;
 
-	for (i = 0; i < 2; i++) {
+	p[2].name = "thread2";
+	p[2].devpath = devpath;
+	p[2].fd = fd2;
+	p[2].is_verbose = is_verbose;
+	p[2].test_area = test_area + 2*1024*1024; /* Do not overlap with other thread */
+	p[2].nb_loop = nb_loop;
+	p[2].is_verbose = is_verbose;
+	p[2].err = EINPROGRESS;
+
+	for (i = 0; i < nb_thread; i++) {
 		err = pthread_create(&thread_id[i], NULL, thread_fct, &p[i]);
 		if (err) {
 			fprintf(stderr,"pthread_create(%d) failed (%d-%s)\n",
@@ -286,7 +309,7 @@ static int test_multithread(int fd, int is_verbose, const char *devpath, off_t t
 	}
 
 	err = 0;
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < nb_thread; i++) {
 		err2 = pthread_join(thread_id[i], NULL);
 		if (err2) {
 			fprintf(stderr,"pthread_join(%d) failed (%d-%s)\n",
@@ -307,18 +330,29 @@ static int test_multithread(int fd, int is_verbose, const char *devpath, off_t t
 	}
 
 end:
+	close(fd2);
 	close(fd1);
 	return err;
 }
 
 static int test4(int fd, int is_verbose, const char *devpath, off_t test_area)
 {
-	return test_multithread(fd, is_verbose, devpath, test_area, 10);
+	return test_multithread(fd, is_verbose, devpath, test_area, 10, 2);
 }
 
 static int test5(int fd, int is_verbose, const char *devpath, off_t test_area)
 {
-	return test_multithread(fd, 0, devpath, test_area, 100);
+	return test_multithread(fd, 0, devpath, test_area, 100, 2);
+}
+
+static int test6(int fd, int is_verbose, const char *devpath, off_t test_area)
+{
+	return test_multithread(fd, is_verbose, devpath, test_area, 10, 3);
+}
+
+static int test7(int fd, int is_verbose, const char *devpath, off_t test_area)
+{
+	return test_multithread(fd, 0, devpath, test_area, 100, 3);
 }
 
 int main(int argc, char* argv[])
@@ -332,6 +366,8 @@ int main(int argc, char* argv[])
 		{"test3", test3},
 		{"test4", test4},
 		{"test5", test5},
+		{"test6", test6},
+		{"test7", test7},
 		{0}
 	}, *test;
 	const char *devpath;
