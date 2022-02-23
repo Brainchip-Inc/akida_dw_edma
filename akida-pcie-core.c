@@ -14,6 +14,7 @@
 #include <linux/pci.h>
 #include <linux/pci-epf.h>
 #include <linux/pci_ids.h>
+#include <linux/wait.h>
 
 #include "dw-edma-core.h"
 #include "akida-edma.h"
@@ -43,6 +44,7 @@ struct akida_dma_chan {
 	enum dma_data_direction dma_data_dir;
 	dma_addr_t dma_buf;
 	size_t dma_len;
+	bool is_used;
 };
 
 struct akida_dev {
@@ -53,6 +55,8 @@ struct akida_dev {
 	struct dw_edma dw;
 	struct akida_dma_chan rxchan;
 	struct akida_dma_chan txchan;
+	wait_queue_head_t wq_rxchan;
+	wait_queue_head_t wq_txchan;
 };
 
 static void akida_dma_callback(void *arg)
@@ -175,6 +179,53 @@ static bool akida_is_allowed(phys_addr_t addr, size_t size)
 		addr >= (AKIDA_DMA_RAM_PHY_ADDR + AKIDA_DMA_RAM_PHY_SIZE);
 }
 
+static struct akida_dma_chan *akida_acquire_chan(wait_queue_head_t *wq, struct akida_dma_chan *chan)
+{
+	int ret;
+
+	spin_lock(&wq->lock);
+
+	ret = wait_event_interruptible_locked(*wq, !chan->is_used);
+	if (ret) {
+		spin_unlock(&wq->lock);
+		return ERR_PTR(ret);
+	}
+
+	chan->is_used = true;
+
+	spin_unlock(&wq->lock);
+
+	return chan;
+}
+
+static void akida_release_chan(wait_queue_head_t *wq, struct akida_dma_chan *chan)
+{
+	spin_lock(&wq->lock);
+	chan->is_used = false;
+	wake_up_locked(wq);
+	spin_unlock(&wq->lock);
+}
+
+static inline struct akida_dma_chan *akida_acquire_rxchan(struct akida_dev *akida)
+{
+	return akida_acquire_chan(&akida->wq_rxchan, &akida->rxchan);
+}
+
+static inline void akida_release_rxchan(struct akida_dev *akida, struct akida_dma_chan *rxchan)
+{
+	akida_release_chan(&akida->wq_rxchan, rxchan);
+}
+
+static inline struct akida_dma_chan *akida_acquire_txchan(struct akida_dev *akida)
+{
+	return akida_acquire_chan(&akida->wq_txchan, &akida->txchan);
+}
+
+static inline void akida_release_txchan(struct akida_dev *akida, struct akida_dma_chan *txchan)
+{
+	akida_release_chan(&akida->wq_txchan, txchan);
+}
+
 static ssize_t akida_read(struct file *file, char __user *buf,
 			  size_t sz, loff_t *ppos)
 {
@@ -185,6 +236,7 @@ static ssize_t akida_read(struct file *file, char __user *buf,
 	size_t left;
 	size_t size;
 	char __user *usr_buf;
+	struct akida_dma_chan *rxchan;
 
 	if (!akida_is_allowed(*ppos, sz)) {
 		pci_err(akida->pdev, "dma transfer @0x%llx, %zu bytes not allowed\n",
@@ -196,6 +248,12 @@ static ssize_t akida_read(struct file *file, char __user *buf,
 	if (tmp == NULL)
 		return -ENOMEM;
 
+	rxchan = akida_acquire_rxchan(akida);
+	if (IS_ERR(rxchan)) {
+		kfree(tmp);
+		return PTR_ERR(rxchan);
+	}
+
 	left = sz;
 	usr_buf = buf;
 	while (left) {
@@ -204,7 +262,7 @@ static ssize_t akida_read(struct file *file, char __user *buf,
 			AKIDA_DMA_XFER_MAX_SIZE : left;
 
 		/* ... do transfer ... */
-		ret = akida_dma_transfer(akida, &akida->rxchan, *ppos, size, tmp);
+		ret = akida_dma_transfer(akida, rxchan, *ppos, size, tmp);
 		if (ret < 0)
 			goto end;
 
@@ -221,6 +279,7 @@ static ssize_t akida_read(struct file *file, char __user *buf,
 
 	ret = sz;
 end:
+	akida_release_rxchan(akida, rxchan);
 	kfree(tmp);
 	return ret;
 }
@@ -235,6 +294,7 @@ static ssize_t akida_write(struct file *file, const char __user *buf,
 	size_t left;
 	size_t size;
 	const char __user *usr_buf;
+	struct akida_dma_chan *txchan;
 
 	if (!akida_is_allowed(*ppos, sz)) {
 		pci_err(akida->pdev, "dma transfer @0x%llx, %zu bytes not allowed\n",
@@ -245,6 +305,12 @@ static ssize_t akida_write(struct file *file, const char __user *buf,
 	tmp = kmalloc(AKIDA_DMA_XFER_MAX_SIZE, GFP_KERNEL);
 	if (tmp == NULL)
 		return -ENOMEM;
+
+	txchan = akida_acquire_txchan(akida);
+	if (IS_ERR(txchan)) {
+		kfree(tmp);
+		return PTR_ERR(txchan);
+	}
 
 	left = sz;
 	usr_buf = buf;
@@ -260,7 +326,7 @@ static ssize_t akida_write(struct file *file, const char __user *buf,
 		}
 
 		/* ... do transfer */
-		ret = akida_dma_transfer(akida, &akida->txchan, *ppos, size, tmp);
+		ret = akida_dma_transfer(akida, txchan, *ppos, size, tmp);
 		if (ret < 0)
 			goto end;
 
@@ -272,6 +338,7 @@ static ssize_t akida_write(struct file *file, const char __user *buf,
 	ret = sz;
 
 end:
+	akida_release_txchan(akida, txchan);
 	kfree(tmp);
 	return ret;
 }
@@ -652,6 +719,10 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 		pci_err(pdev, "eDMA probe failed (%d)\n", ret);
 		goto fail_dw_edma_remove;
 	}
+
+	/* Init waitqueues */
+	init_waitqueue_head(&akida->wq_rxchan);
+	init_waitqueue_head(&akida->wq_txchan);
 
 	ret = ida_alloc(&akida_devno, GFP_KERNEL);
 	if (ret < 0) {
