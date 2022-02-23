@@ -112,7 +112,10 @@ static int test2(int fd, int is_verbose, const char *devpath, off_t test_area)
 
 	for (size = 0; size < TEST2_BUFFER_SIZE; size++) {
 		if (buff[0][size] != buff[1][size]) {
-			printf("Mismatch at offset %zu\n",size);
+			printf("Mismatch at offset %zu (read 0x%02"PRIx8", exp 0x%02"PRIx8")\n",
+				size,
+				buff[1][size],
+				buff[0][size]);
 			return EILSEQ;
 		}
 	}
@@ -173,7 +176,7 @@ static int test3(int fd, int is_verbose, const char *devpath, off_t test_area)
 
 	for (size = 0; size < TEST3_BUFFER_SIZE; size++) {
 		if (buff[0][size] != buff[1][size]) {
-			printf("Mismatch at offset %zu (read 0x%04"PRIx16", exp 0x%04"PRIx16"\n",
+			printf("Mismatch at offset %zu (read 0x%04"PRIx16", exp 0x%04"PRIx16")\n",
 				size,
 				buff[1][size],
 				buff[0][size]);
