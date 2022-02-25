@@ -30,6 +30,11 @@ endif
 endif
 endif
 
+ifeq ($(CONFIG_ARCH_BCM2835),y)
+# Kernel built to support a Raspberry Pi CM4 -> Force 32bit PCIe accesses
+ccflags-y += -DAKIDA_DW_EDMA_FORCE_32BIT
+endif
+
 obj-m := akida-pcie.o
 
 akida-pcie-y += akida-pcie-core.o
