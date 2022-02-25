@@ -13,6 +13,13 @@
 #include "dw-edma-v0-regs.h"
 #include "dw-edma-v0-debugfs.h"
 
+#ifdef CONFIG_64BIT
+#ifdef AKIDA_DW_EDMA_FORCE_32BIT
+#pragma message "PCIe 64bit accesses forced to 32bit accesses"
+#undef CONFIG_64BIT
+#endif
+#endif
+
 enum dw_edma_control {
 	DW_EDMA_V0_CB					= BIT(0),
 	DW_EDMA_V0_TCB					= BIT(1),
