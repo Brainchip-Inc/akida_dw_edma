@@ -566,6 +566,9 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	akida->pdev = pdev;
 
+	/* Disable ASPM L0s and L1 states as they cause device stop working */
+	pci_disable_link_state(pdev, PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1);
+
 	/* Setup iATU */
 	ret = akida_setup_iatu(pdev);
 	if (ret) {
