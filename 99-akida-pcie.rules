@@ -1,0 +1,8 @@
+#
+# Alvaro Moran <amoran@brainchip.com>
+#
+# Akida PCIe interface
+
+KERNEL=="akida[0-9]*", MODE="0666"
+
+ACTION=="add",SUBSYSTEM=="pci",ATTR{vendor}=="0x1e7c",ATTR{device}=="0xbca1",RUN+="/bin/chmod 666 /sys%p/resource0",RUN+="/bin/chmod 666 /sys%p/resource2",RUN+="/bin/chmod 666 /sys%p/resource4",RUN+="/bin/chmod 666 /sys%p/enable"
