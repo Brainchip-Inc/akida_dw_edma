@@ -1,0 +1,6 @@
+#
+# Alvaro Moran <amoran@brainchip.com>
+#
+# Akida PCIe interface
+
+KERNEL=="akida[0-9]*", MODE="0666"
