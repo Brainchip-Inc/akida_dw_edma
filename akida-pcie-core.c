@@ -14,6 +14,7 @@
 #include <linux/pci.h>
 #include <linux/pci-epf.h>
 #include <linux/pci_ids.h>
+#include <linux/uaccess.h>
 #include <linux/wait.h>
 
 #include "dw-edma-core.h"
