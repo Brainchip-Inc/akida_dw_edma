@@ -15,7 +15,12 @@
 #include <linux/pci-epf.h>
 #include <linux/pci_ids.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
 #include <linux/wait.h>
+
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 4, 0)
+#include <linux/pci-aspm.h>
+#endif
 
 #include "dw-edma-core.h"
 #include "akida-edma.h"
