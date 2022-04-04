@@ -10,24 +10,16 @@ AKIDA_KERNEL_VERSION_RANK := $(shell \
 
 ifneq ($(word 1,$(AKIDA_KERNEL_VERSION_RANK)), 5.4)
 $(error Kernel $(VERSION).$(PATCHLEVEL) too old)
-else
-ifneq ($(word 2,$(AKIDA_KERNEL_VERSION_RANK)), 5.6)
+else ifneq ($(word 2,$(AKIDA_KERNEL_VERSION_RANK)), 5.6)
 ccflags-y += -I$(src)/kernel/5.4/drivers/dma
-else
-ifneq ($(word 3,$(AKIDA_KERNEL_VERSION_RANK)), 5.7)
+else ifneq ($(word 3,$(AKIDA_KERNEL_VERSION_RANK)), 5.7)
 ccflags-y += -I$(src)/kernel/5.6/drivers/dma
-else
-ifneq ($(word 4,$(AKIDA_KERNEL_VERSION_RANK)), 5.16)
+else ifneq ($(word 4,$(AKIDA_KERNEL_VERSION_RANK)), 5.16)
 ccflags-y += -I$(src)/kernel/5.7/drivers/dma
-else
-ifneq ($(word 5,$(AKIDA_KERNEL_VERSION_RANK)), 5.17)
+else ifneq ($(word 5,$(AKIDA_KERNEL_VERSION_RANK)), 5.17)
 ccflags-y += -I$(src)/kernel/5.16/drivers/dma
 else
 $(error Kernel $(VERSION).$(PATCHLEVEL) not supported. Some incompatibilities can be present)
-endif
-endif
-endif
-endif
 endif
 
 ifeq ($(CONFIG_ARCH_BCM2835),y)
