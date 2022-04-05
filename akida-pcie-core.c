@@ -14,7 +14,13 @@
 #include <linux/pci.h>
 #include <linux/pci-epf.h>
 #include <linux/pci_ids.h>
+#include <linux/uaccess.h>
+#include <linux/version.h>
 #include <linux/wait.h>
+
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 4, 0)
+#include <linux/pci-aspm.h>
+#endif
 
 #include "dw-edma-core.h"
 #include "akida-edma.h"
@@ -772,11 +778,19 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	init_waitqueue_head(&akida->wq_rxchan);
 	init_waitqueue_head(&akida->wq_txchan);
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
+	ret = ida_simple_get(&akida_devno, 0, 0, GFP_KERNEL);
+	if (ret < 0) {
+		pci_err(pdev, "ida simple get failed (%d)\n", ret);
+		goto fail_akida_dma_exit;
+	}
+#else
 	ret = ida_alloc(&akida_devno, GFP_KERNEL);
 	if (ret < 0) {
 		pci_err(pdev, "ida alloc failed (%d)\n", ret);
 		goto fail_akida_dma_exit;
 	}
+#endif
 	akida->devno = ret;
 
 	/* Declare misc device */
@@ -799,7 +813,11 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	return 0;
 
 fail_ida_alloc:
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
+	ida_simple_remove(&akida_devno, akida->devno);
+#else
 	ida_free(&akida_devno, akida->devno);
+#endif
 fail_akida_dma_exit:
 	akida_dma_exit(akida);
 fail_dw_edma_remove:
@@ -815,7 +833,11 @@ static void akida_remove(struct pci_dev *pdev)
 	int ret;
 
 	misc_deregister(&akida->miscdev);
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
+	ida_simple_remove(&akida_devno, akida->devno);
+#else
 	ida_free(&akida_devno, akida->devno);
+#endif
 	akida_dma_exit(akida);
 	ret = akida_dw_edma_remove(&akida->edma_chip);
 	if (ret)
