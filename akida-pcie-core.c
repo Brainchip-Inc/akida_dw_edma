@@ -31,6 +31,7 @@ static DEFINE_IDA(akida_devno);
  * This area is used by the eDMA controler and is located inside the device.
  * This physical address is from the eDMA point of view
  */
+#ifndef CFG_AKIDA_DMA_RAM_PHY
 #define AKIDA_DMA_RAM_PHY_ADDR	0x20000000
 
 /* Linked-list: 1MB at 0x000000000 offset, split in 4 area (512kB each) */
@@ -54,6 +55,7 @@ static DEFINE_IDA(akida_devno);
 #define AKIDA_DMA_RAM_PHY_RX1_DT_SIZE         0xC0000
 
 #define AKIDA_DMA_RAM_PHY_SIZE 0x00400000 /* 4MB */
+#endif
 
 #define AKIDA_DMA_RAM_PHY_LL_OFFSET(t,i) AKIDA_DMA_RAM_PHY_##t##i##_LL_OFFSET
 #define AKIDA_DMA_RAM_PHY_LL_SIZE(t,i)   AKIDA_DMA_RAM_PHY_##t##i##_LL_SIZE
