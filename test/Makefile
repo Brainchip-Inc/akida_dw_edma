@@ -8,7 +8,7 @@ else
 Q :=
 endif
 
-all: test
+all: test mmap_access
 .PHONY: all
 
 %.o: %.c Makefile
@@ -19,7 +19,12 @@ test: test.o
 	@printf "  LNK  $@\n"
 	$(Q)$(CC) $(LDFLAGS) $(LDLIBS) -o $@ $^
 
+mmap_access: mmap_access.o
+	@printf "  LNK  $@\n"
+	$(Q)$(CC) $(LDFLAGS) $(LDLIBS) -o $@ $^
+
 clean:
 	@rm -f *.o
 	@rm -f test
+	@rm -f mmap_access
 .PHONY: all
