@@ -390,11 +390,40 @@ end:
 	return ret;
 }
 
+static const struct vm_operations_struct akida_vm_ops = {
+#ifdef CONFIG_HAVE_IOREMAP_PROT
+	.access = generic_access_phys,
+#endif
+};
+
+static int akida_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	struct akida_dev *akida =
+		container_of(file->private_data, struct akida_dev, miscdev);
+	unsigned long size;
+
+	if (!(pci_resource_flags(akida->pdev, BAR_0) & IORESOURCE_MEM))
+		return -EINVAL;
+
+	size = ((pci_resource_len(akida->pdev, BAR_0) - 1) >> PAGE_SHIFT) + 1;
+	if (vma->vm_pgoff + vma_pages(vma) > size)
+		return -EINVAL;
+
+	vma->vm_pgoff += (pci_resource_start(akida->pdev, BAR_0) >> PAGE_SHIFT);
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+	vma->vm_ops = &akida_vm_ops;
+
+	return io_remap_pfn_range(vma, vma->vm_start, vma->vm_pgoff,
+				  vma->vm_end - vma->vm_start,
+				  vma->vm_page_prot);
+}
+
 static const struct file_operations akida_fops = {
 	.owner = THIS_MODULE,
 	.write = akida_write,
 	.read = akida_read,
 	.llseek = no_seek_end_llseek,
+	.mmap = akida_mmap,
 };
 
 struct akida_iatu_conf {
