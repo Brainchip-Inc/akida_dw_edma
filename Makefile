@@ -46,6 +46,46 @@ obj-m := akida-pcie.o
 akida-pcie-y += akida-pcie-core.o
 CFLAGS_akida-pcie-core.o += -I$(src)/akida-dw-edma
 
+ifneq ($(CFG_AKIDA_DMA_RAM_PHY_FILE),)
+# makefile for AKIDA_DMA_RAM_PHY_* variable provided.
+# include it and activate CFG_AKIDA_DMA_RAM_PHY
+include $(CFG_AKIDA_DMA_RAM_PHY_FILE)
+CFG_AKIDA_DMA_RAM_PHY = 1
+endif
+
+ifneq ($(CFG_AKIDA_DMA_RAM_PHY),)
+# CFG_AKIDA_DMA_RAM_PHY activated -> Set needed 'define'
+
+define AKIDA_DEFINE_IF_SET
+$(if $($(strip $(1))),-D$(strip $(1))=$($(strip $(1))))
+endef
+
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_ADDR)
+
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX0_LL_OFFSET)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX0_LL_SIZE)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX1_LL_OFFSET)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX1_LL_SIZE)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_RX0_LL_OFFSET)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_RX0_LL_SIZE)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_RX1_LL_OFFSET)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_RX1_LL_SIZE)
+
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX0_DT_OFFSET)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX0_DT_SIZE)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX1_DT_OFFSET)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX1_DT_SIZE)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_RX0_DT_OFFSET)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_RX0_DT_SIZE)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_RX1_DT_OFFSET)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_RX1_DT_SIZE)
+
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_SIZE)
+
+# Activate CFG_AKIDA_DMA_RAM_PHY at source level
+CFLAGS_akida-pcie-core.o += -DCFG_AKIDA_DMA_RAM_PHY
+endif
+
 akida-pcie-y += akida-dw-edma/dw-edma-core.o
 akida-pcie-y += akida-dw-edma/dw-edma-v0-core.o
 akida-pcie-y += akida-dw-edma/dw-edma-v0-debugfs.o

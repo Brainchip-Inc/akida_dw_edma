@@ -31,14 +31,36 @@ static DEFINE_IDA(akida_devno);
  * This area is used by the eDMA controler and is located inside the device.
  * This physical address is from the eDMA point of view
  */
+#ifndef CFG_AKIDA_DMA_RAM_PHY
 #define AKIDA_DMA_RAM_PHY_ADDR	0x20000000
+
 /* Linked-list: 1MB at 0x000000000 offset, split in 4 area (512kB each) */
-#define AKIDA_DMA_RAM_PHY_LL_OFFSET(i)  (0x00000000 + (i) * 0x40000)
-#define AKIDA_DMA_RAM_PHY_LL_SIZE(i)    0x40000
-/* Linked-list: 3MB at 0x001000000 offset, split in 4 area (768kB each) */
-#define AKIDA_DMA_RAM_PHY_DT_OFFSET(i)  (0x00100000 + (i) * 0xC0000)
-#define AKIDA_DMA_RAM_PHY_DT_SIZE(i)    0xC0000
-#define AKIDA_DMA_RAM_PHY_SIZE	0x00400000 /* 4MB */
+#define AKIDA_DMA_RAM_PHY_TX0_LL_OFFSET    0x00000000
+#define AKIDA_DMA_RAM_PHY_TX0_LL_SIZE         0x40000
+#define AKIDA_DMA_RAM_PHY_TX1_LL_OFFSET    0x00040000
+#define AKIDA_DMA_RAM_PHY_TX1_LL_SIZE         0x40000
+#define AKIDA_DMA_RAM_PHY_RX0_LL_OFFSET    0x00080000
+#define AKIDA_DMA_RAM_PHY_RX0_LL_SIZE         0x40000
+#define AKIDA_DMA_RAM_PHY_RX1_LL_OFFSET    0x000C0000
+#define AKIDA_DMA_RAM_PHY_RX1_LL_SIZE         0x40000
+
+/* Data: 3MB at 0x001000000 offset, split in 4 area (768kB each) */
+#define AKIDA_DMA_RAM_PHY_TX0_DT_OFFSET    0x00100000
+#define AKIDA_DMA_RAM_PHY_TX0_DT_SIZE         0xC0000
+#define AKIDA_DMA_RAM_PHY_TX1_DT_OFFSET    0x001C0000
+#define AKIDA_DMA_RAM_PHY_TX1_DT_SIZE         0xC0000
+#define AKIDA_DMA_RAM_PHY_RX0_DT_OFFSET    0x00280000
+#define AKIDA_DMA_RAM_PHY_RX0_DT_SIZE         0xC0000
+#define AKIDA_DMA_RAM_PHY_RX1_DT_OFFSET    0x00340000
+#define AKIDA_DMA_RAM_PHY_RX1_DT_SIZE         0xC0000
+
+#define AKIDA_DMA_RAM_PHY_SIZE 0x00400000 /* 4MB */
+#endif
+
+#define AKIDA_DMA_RAM_PHY_LL_OFFSET(t,i) AKIDA_DMA_RAM_PHY_##t##i##_LL_OFFSET
+#define AKIDA_DMA_RAM_PHY_LL_SIZE(t,i)   AKIDA_DMA_RAM_PHY_##t##i##_LL_SIZE
+#define AKIDA_DMA_RAM_PHY_DT_OFFSET(t,i) AKIDA_DMA_RAM_PHY_##t##i##_DT_OFFSET
+#define AKIDA_DMA_RAM_PHY_DT_SIZE(t,i)   AKIDA_DMA_RAM_PHY_##t##i##_DT_SIZE
 
 /* Maximum DMA transfer chunk size */
 #define AKIDA_DMA_XFER_MAX_SIZE  1024
@@ -654,52 +676,52 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	 * This area contains linked-list and data buffers (1MB + 3MB)
 	 */
 	akida->dw.ll_region_wr[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.ll_region_wr[0].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(0);
+	akida->dw.ll_region_wr[0].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,0);
 	akida->dw.ll_region_wr[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.ll_region_wr[0].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(0);
-	akida->dw.ll_region_wr[0].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(0);
+	akida->dw.ll_region_wr[0].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,0);
+	akida->dw.ll_region_wr[0].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(TX,0);
 
 	akida->dw.dt_region_wr[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.dt_region_wr[0].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(0);
+	akida->dw.dt_region_wr[0].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,0);
 	akida->dw.dt_region_wr[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.dt_region_wr[0].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(0);
-	akida->dw.dt_region_wr[0].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(0);
+	akida->dw.dt_region_wr[0].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,0);
+	akida->dw.dt_region_wr[0].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(TX,0);
 
 	akida->dw.ll_region_wr[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.ll_region_wr[1].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(1);
+	akida->dw.ll_region_wr[1].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,1);
 	akida->dw.ll_region_wr[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.ll_region_wr[1].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(1);
-	akida->dw.ll_region_wr[1].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(1);
+	akida->dw.ll_region_wr[1].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,1);
+	akida->dw.ll_region_wr[1].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(TX,1);
 
 	akida->dw.dt_region_wr[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.dt_region_wr[1].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(1);
+	akida->dw.dt_region_wr[1].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,1);
 	akida->dw.dt_region_wr[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.dt_region_wr[1].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(1);
-	akida->dw.dt_region_wr[1].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(1);
+	akida->dw.dt_region_wr[1].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,1);
+	akida->dw.dt_region_wr[1].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(TX,1);
 
 	akida->dw.ll_region_rd[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.ll_region_rd[0].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(2);
+	akida->dw.ll_region_rd[0].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,0);
 	akida->dw.ll_region_rd[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.ll_region_rd[0].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(2);
-	akida->dw.ll_region_rd[0].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(2);
+	akida->dw.ll_region_rd[0].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,0);
+	akida->dw.ll_region_rd[0].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(RX,0);
 
 	akida->dw.dt_region_rd[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.dt_region_rd[0].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(2);
+	akida->dw.dt_region_rd[0].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,0);
 	akida->dw.dt_region_rd[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.dt_region_rd[0].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(2);
-	akida->dw.dt_region_rd[0].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(2);
+	akida->dw.dt_region_rd[0].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,0);
+	akida->dw.dt_region_rd[0].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(RX,0);
 
 	akida->dw.ll_region_rd[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.ll_region_rd[1].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(3);
+	akida->dw.ll_region_rd[1].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,1);
 	akida->dw.ll_region_rd[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.ll_region_rd[1].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(3);
-	akida->dw.ll_region_rd[1].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(3);
+	akida->dw.ll_region_rd[1].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,1);
+	akida->dw.ll_region_rd[1].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(RX,1);
 
 	akida->dw.dt_region_rd[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.dt_region_rd[1].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(3);
+	akida->dw.dt_region_rd[1].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,1);
 	akida->dw.dt_region_rd[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.dt_region_rd[1].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(3);
-	akida->dw.dt_region_rd[1].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(3);
+	akida->dw.dt_region_rd[1].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,1);
+	akida->dw.dt_region_rd[1].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(RX,1);
 
 	akida->dw.mf = EDMA_MF_EDMA_LEGACY;
 	akida->dw.nr_irqs = 1;
