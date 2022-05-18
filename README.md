@@ -22,6 +22,8 @@ preferences in `99-akida-pcie.rules`
 If you don't want the driver to load on every boot, edit the `/etc/modules`
 file after installation and remove `akida_pcie` line.
 
+***After a kernel update you need to run the install script again.***
+
 ## Support
 Please visit:
 - https://doc.brainchipinc.com/ for akida documentation, examples and tutorials
