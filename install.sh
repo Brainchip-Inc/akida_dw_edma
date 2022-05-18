@@ -6,7 +6,8 @@
 # It will also remove the pedd_bc driver if present
 
 echo "Building akida-pcie driver module"
-# Build driver
+# Clean & build driver
+make clean
 make || exit 1
 
 # Copy driver to /lib/modules folder
