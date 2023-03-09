@@ -653,9 +653,17 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	}
 
 	/* DMA configuration */
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 17, 0)
 	ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(64));
+#else
+	ret = dma_set_mask(&pdev->dev, DMA_BIT_MASK(64));
+#endif
 	if (!ret) {
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 17, 0)
 		ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(64));
+#else
+		ret = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(64));
+#endif
 		if (ret) {
 			pci_err(pdev, "consistent DMA mask 64 set failed (%d)\n", ret);
 			return ret;
@@ -663,13 +671,21 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	} else {
 		pci_warn(pdev, "DMA mask 64 set failed\n");
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 17, 0)
 		ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
+#else
+		ret = dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
+#endif
 		if (ret) {
 			pci_err(pdev, "DMA mask 32 set failed (%d)\n", ret);
 			return ret;
 		}
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 17, 0)
 		ret = pci_set_consistent_dma_mask(pdev, DMA_BIT_MASK(32));
+#else
+		ret = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
+#endif
 		if (ret) {
 			pci_err(pdev, "consistent DMA mask 32 set failed (%d)\n", ret);
 			return ret;
