@@ -396,7 +396,7 @@ static const struct vm_operations_struct akida_vm_ops = {
 #endif
 };
 
-static int akida_mmap(struct file *file, struct vm_area_struct *vma)
+static int akida_1000_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct akida_dev *akida =
 		container_of(file->private_data, struct akida_dev, miscdev);
@@ -418,12 +418,12 @@ static int akida_mmap(struct file *file, struct vm_area_struct *vma)
 				  vma->vm_page_prot);
 }
 
-static const struct file_operations akida_fops = {
+static const struct file_operations akida_1000_fops = {
 	.owner = THIS_MODULE,
 	.write = akida_write,
 	.read = akida_read,
 	.llseek = no_seek_end_llseek,
-	.mmap = akida_mmap,
+	.mmap = akida_1000_mmap,
 };
 
 struct akida_iatu_conf {
@@ -431,7 +431,7 @@ struct akida_iatu_conf {
 	u32 val;
 };
 
-static const struct akida_iatu_conf akida_iatu_conf_table[] = {
+static const struct akida_iatu_conf akida_1000_iatu_conf_table[] = {
 	/* Akida BAR
 	 * Region 0 inbound (31:dir N-0:Region Index)
 	 * Function 0 Mem   (22-20:function)
@@ -469,9 +469,9 @@ static const struct akida_iatu_conf akida_iatu_conf_table[] = {
 	{0}
 };
 
-static int akida_setup_iatu(struct pci_dev *pdev)
+static int akida_1000_setup_iatu(struct pci_dev *pdev)
 {
-	const struct akida_iatu_conf *conf = akida_iatu_conf_table;
+	const struct akida_iatu_conf *conf = akida_1000_iatu_conf_table;
 	int ret;
 
 	while (conf->addr) {
@@ -612,7 +612,7 @@ static const struct dw_edma_core_ops akida_dw_edma_core_ops = {
 	.irq_vector = akida_dw_edma_pcie_irq_vector,
 };
 
-static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
+static int akida_1000_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
 	struct akida_dev *akida;
 	int ret, nr_irqs;
@@ -627,7 +627,7 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	pci_disable_link_state(pdev, PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1);
 
 	/* Setup iATU */
-	ret = akida_setup_iatu(pdev);
+	ret = akida_1000_setup_iatu(pdev);
 	if (ret) {
 		pci_err(pdev, "seting up iATU failed (%d)\n", ret);
 		return ret;
@@ -864,7 +864,7 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	akida->miscdev.minor = MISC_DYNAMIC_MINOR;
 	akida->miscdev.name = devm_kasprintf(&pdev->dev, GFP_KERNEL,
 					     "akida%d", akida->devno);
-	akida->miscdev.fops = &akida_fops;
+	akida->miscdev.fops = &akida_1000_fops;
 	akida->miscdev.parent = &pdev->dev;
 
 	pci_set_drvdata(pdev, akida);
@@ -919,12 +919,12 @@ static void akida_remove(struct pci_dev *pdev)
 #define PCI_VENDOR_ID_BRAINCHIP 0x1e7c
 #endif
 
-#ifndef PCI_DEVICE_ID_BRAINCHIP_AKIDA
-#define PCI_DEVICE_ID_BRAINCHIP_AKIDA 0xbca1
+#ifndef PCI_DEVICE_ID_BRAINCHIP_AKIDA_1000
+#define PCI_DEVICE_ID_BRAINCHIP_AKIDA_1000 0xbca1
 #endif
 
 static const struct pci_device_id akida_pci_ids[] = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_BRAINCHIP, PCI_DEVICE_ID_BRAINCHIP_AKIDA) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_BRAINCHIP, PCI_DEVICE_ID_BRAINCHIP_AKIDA_1000) },
 	{ 0 }
 };
 
@@ -933,7 +933,7 @@ MODULE_DEVICE_TABLE(pci, akida_pci_ids);
 static struct pci_driver akida_driver = {
 	.name		= "akida-pcie",
 	.id_table	= akida_pci_ids,
-	.probe		= akida_probe,
+	.probe		= akida_1000_probe,
 	.remove		= akida_remove,
 };
 
