@@ -5,7 +5,7 @@ ifneq ($(KERNELRELEASE),)
 # copied in kernel/x.y/ subdirectory depending on kernel API changes.
 # These files are drivers/dma/dmaengine.h and drivers/dma/virt-dma.h
 AKIDA_KERNEL_VERSION_RANK := $(shell \
-	printf "$(VERSION).$(PATCHLEVEL)\n4.9\n4.14\n4.16\n5.2\n5.3\n5.4\n5.6\n5.7\n5.16\n5.18\n" | \
+	printf "$(VERSION).$(PATCHLEVEL)\n4.9\n4.14\n4.16\n5.2\n5.3\n5.4\n5.6\n5.7\n5.16\n6.0\n" | \
 	sort -V )
 
 ifneq ($(word 1,$(AKIDA_KERNEL_VERSION_RANK)), 4.9)
@@ -30,7 +30,7 @@ else ifneq ($(word 8,$(AKIDA_KERNEL_VERSION_RANK)), 5.7)
 ccflags-y += -I$(src)/kernel/5.6/drivers/dma
 else ifneq ($(word 9,$(AKIDA_KERNEL_VERSION_RANK)), 5.16)
 ccflags-y += -I$(src)/kernel/5.7/drivers/dma
-else ifneq ($(word 10,$(AKIDA_KERNEL_VERSION_RANK)), 5.18)
+else ifneq ($(word 10,$(AKIDA_KERNEL_VERSION_RANK)), 6.0)
 ccflags-y += -I$(src)/kernel/5.16/drivers/dma
 else
 $(error Kernel $(VERSION).$(PATCHLEVEL) not supported. Some incompatibilities can be present)

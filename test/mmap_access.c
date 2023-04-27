@@ -11,11 +11,11 @@
 static void usage(const char *prog_name)
 {
 	fprintf(stderr, "%s dev offset size [value]\n", prog_name);
-	fprintf(stderr, "   dev     device to use for instance /dev/akida0\n"
-	                "   offset  offset in devive BAR0 area\n"
+	fprintf(stderr, "   dev     Device to use for instance /dev/akida0\n"
+	                "   offset  Offset in the device area\n"
 	                "   size    Access size (8, 16, 32)\n"
-	                "   value   if present write value at given offset\n"
-	                "           if not present, read the given offset\n");
+	                "   value   If present write value at given offset\n"
+	                "           If not present, read the given offset\n");
 }
 
 int strtou32(const char *str, uint32_t *val)
@@ -41,7 +41,7 @@ int strtou32(const char *str, uint32_t *val)
 int main(int argc, char* argv[])
 {
 	const char *devpath;
-	uint32_t offset;
+	uint32_t offset, offset_aligned;
 	int access_size;
 	uint32_t value;
 	int is_write;
@@ -88,8 +88,10 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	addr = mmap(NULL, 4*1024*1024, PROT_READ | PROT_WRITE,
-		MAP_SHARED, fd, 0);
+	offset_aligned = (offset >> 12) << 12;
+
+	addr = mmap(NULL, 1 << 12, PROT_READ | PROT_WRITE,
+		MAP_SHARED, fd, offset_aligned);
 	close(fd);
 	if (addr == MAP_FAILED) {
 		err = errno;
@@ -100,20 +102,20 @@ int main(int argc, char* argv[])
 
 	if (is_write) {
 		switch (access_size) {
-		case 8:  *((volatile uint8_t *) (addr + offset)) = value; break;
-		case 16: *((volatile uint16_t *)(addr + offset)) = value; break;
-		case 32: *((volatile uint32_t *)(addr + offset)) = value; break;
+		case 8:  *((volatile uint8_t *) (addr + (offset - offset_aligned))) = value; break;
+		case 16: *((volatile uint16_t *)(addr + (offset - offset_aligned))) = value; break;
+		case 32: *((volatile uint32_t *)(addr + (offset - offset_aligned))) = value; break;
 		}
 	} else {
 		switch (access_size) {
-		case 8:  value = *((volatile uint8_t *) (addr + offset)); break;
-		case 16: value = *((volatile uint16_t *)(addr + offset)); break;
-		case 32: value = *((volatile uint32_t *)(addr + offset)); break;
+		case 8:  value = *((volatile uint8_t *) (addr + (offset - offset_aligned))); break;
+		case 16: value = *((volatile uint16_t *)(addr + (offset - offset_aligned))); break;
+		case 32: value = *((volatile uint32_t *)(addr + (offset - offset_aligned))); break;
 		}
 		printf("0x%x\n", value);
 	}
 
-	munmap(addr, 4*1024*1024);
+	munmap(addr, 1 << 12);
 
 	return 0;
 }
