@@ -84,7 +84,6 @@ struct akida_dev {
 	int devno;
 	struct miscdevice miscdev;
 	struct dw_edma_chip edma_chip;
-	struct dw_edma dw;
 	struct akida_dma_chan rxchan[2];
 	struct akida_dma_chan txchan[2];
 	wait_queue_head_t wq_rxchan;
@@ -794,124 +793,113 @@ static int akida_1000_probe(struct pci_dev *pdev)
 	}
 
 	/* Setup eDMA engine */
-	akida->dw.rg_region.vaddr = pcim_iomap_table(pdev)[BAR_2];
-	akida->dw.rg_region.vaddr += 0x00000970;
-	akida->dw.rg_region.paddr = pdev->resource[BAR_2].start;
-	akida->dw.rg_region.paddr += 0x00000970;
+	akida->edma_chip.reg_base = pcim_iomap_table(pdev)[BAR_2];
+	akida->edma_chip.reg_base += 0x00000970;
 
 	/* 2 write and 2 read channels */
-	akida->dw.wr_ch_cnt = 2;
-	akida->dw.rd_ch_cnt = 2;
+	akida->edma_chip.ll_wr_cnt = 2;
+	akida->edma_chip.ll_rd_cnt = 2;
 
 	/* BAR4 maps to 0x2000000 from DMA controller point of view
 	 * This area contains linked-list and data buffers (1MB + 3MB)
 	 */
-	akida->dw.ll_region_wr[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.ll_region_wr[0].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,0);
-	akida->dw.ll_region_wr[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.ll_region_wr[0].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,0);
-	akida->dw.ll_region_wr[0].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(TX,0);
+	akida->edma_chip.ll_region_wr[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
+	akida->edma_chip.ll_region_wr[0].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,0);
+	akida->edma_chip.ll_region_wr[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
+	akida->edma_chip.ll_region_wr[0].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,0);
+	akida->edma_chip.ll_region_wr[0].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(TX,0);
 
-	akida->dw.dt_region_wr[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.dt_region_wr[0].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,0);
-	akida->dw.dt_region_wr[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.dt_region_wr[0].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,0);
-	akida->dw.dt_region_wr[0].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(TX,0);
+	akida->edma_chip.dt_region_wr[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
+	akida->edma_chip.dt_region_wr[0].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,0);
+	akida->edma_chip.dt_region_wr[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
+	akida->edma_chip.dt_region_wr[0].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,0);
+	akida->edma_chip.dt_region_wr[0].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(TX,0);
 
-	akida->dw.ll_region_wr[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.ll_region_wr[1].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,1);
-	akida->dw.ll_region_wr[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.ll_region_wr[1].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,1);
-	akida->dw.ll_region_wr[1].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(TX,1);
+	akida->edma_chip.ll_region_wr[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
+	akida->edma_chip.ll_region_wr[1].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,1);
+	akida->edma_chip.ll_region_wr[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
+	akida->edma_chip.ll_region_wr[1].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(TX,1);
+	akida->edma_chip.ll_region_wr[1].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(TX,1);
 
-	akida->dw.dt_region_wr[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.dt_region_wr[1].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,1);
-	akida->dw.dt_region_wr[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.dt_region_wr[1].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,1);
-	akida->dw.dt_region_wr[1].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(TX,1);
+	akida->edma_chip.dt_region_wr[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
+	akida->edma_chip.dt_region_wr[1].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,1);
+	akida->edma_chip.dt_region_wr[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
+	akida->edma_chip.dt_region_wr[1].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(TX,1);
+	akida->edma_chip.dt_region_wr[1].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(TX,1);
 
-	akida->dw.ll_region_rd[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.ll_region_rd[0].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,0);
-	akida->dw.ll_region_rd[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.ll_region_rd[0].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,0);
-	akida->dw.ll_region_rd[0].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(RX,0);
+	akida->edma_chip.ll_region_rd[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
+	akida->edma_chip.ll_region_rd[0].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,0);
+	akida->edma_chip.ll_region_rd[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
+	akida->edma_chip.ll_region_rd[0].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,0);
+	akida->edma_chip.ll_region_rd[0].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(RX,0);
 
-	akida->dw.dt_region_rd[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.dt_region_rd[0].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,0);
-	akida->dw.dt_region_rd[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.dt_region_rd[0].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,0);
-	akida->dw.dt_region_rd[0].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(RX,0);
+	akida->edma_chip.dt_region_rd[0].vaddr = pcim_iomap_table(pdev)[BAR_4];
+	akida->edma_chip.dt_region_rd[0].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,0);
+	akida->edma_chip.dt_region_rd[0].paddr = AKIDA_DMA_RAM_PHY_ADDR;
+	akida->edma_chip.dt_region_rd[0].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,0);
+	akida->edma_chip.dt_region_rd[0].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(RX,0);
 
-	akida->dw.ll_region_rd[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.ll_region_rd[1].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,1);
-	akida->dw.ll_region_rd[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.ll_region_rd[1].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,1);
-	akida->dw.ll_region_rd[1].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(RX,1);
+	akida->edma_chip.ll_region_rd[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
+	akida->edma_chip.ll_region_rd[1].vaddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,1);
+	akida->edma_chip.ll_region_rd[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
+	akida->edma_chip.ll_region_rd[1].paddr += AKIDA_DMA_RAM_PHY_LL_OFFSET(RX,1);
+	akida->edma_chip.ll_region_rd[1].sz = AKIDA_DMA_RAM_PHY_LL_SIZE(RX,1);
 
-	akida->dw.dt_region_rd[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
-	akida->dw.dt_region_rd[1].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,1);
-	akida->dw.dt_region_rd[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
-	akida->dw.dt_region_rd[1].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,1);
-	akida->dw.dt_region_rd[1].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(RX,1);
+	akida->edma_chip.dt_region_rd[1].vaddr = pcim_iomap_table(pdev)[BAR_4];
+	akida->edma_chip.dt_region_rd[1].vaddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,1);
+	akida->edma_chip.dt_region_rd[1].paddr = AKIDA_DMA_RAM_PHY_ADDR;
+	akida->edma_chip.dt_region_rd[1].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,1);
+	akida->edma_chip.dt_region_rd[1].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(RX,1);
 
-	akida->dw.mf = EDMA_MF_EDMA_LEGACY;
-	akida->dw.nr_irqs = 1;
-	akida->dw.ops = &akida_dw_edma_core_ops;
-
-	akida->dw.irq = devm_kcalloc(&pdev->dev, nr_irqs,
-				     sizeof(*akida->dw.irq), GFP_KERNEL);
-	if (!akida->dw.irq) {
-		ret = -ENOMEM;
-		goto fail_free_irq_vectors;
-	}
+	akida->edma_chip.mf = EDMA_MF_EDMA_LEGACY;
+	akida->edma_chip.nr_irqs = 1;
+	akida->edma_chip.ops = &akida_dw_edma_core_ops;
 
 	/* Debug info */
-	switch (akida->dw.mf) {
+	switch (akida->edma_chip.mf) {
 	case EDMA_MF_EDMA_LEGACY:
-		pci_dbg(pdev, "Version: eDMA Port Logic (0x%x)\n", akida->dw.mf);
+		pci_dbg(pdev, "Version: eDMA Port Logic (0x%x)\n", akida->edma_chip.mf);
 		break;
 	case EDMA_MF_EDMA_UNROLL:
-		pci_dbg(pdev, "Version: eDMA Unroll (0x%x)\n", akida->dw.mf);
+		pci_dbg(pdev, "Version: eDMA Unroll (0x%x)\n", akida->edma_chip.mf);
 		break;
 	case EDMA_MF_HDMA_COMPAT:
-		pci_dbg(pdev, "Version: HDMA Compatible (0x%x)\n", akida->dw.mf);
+		pci_dbg(pdev, "Version: HDMA Compatible (0x%x)\n", akida->edma_chip.mf);
 		break;
 	default:
-		pci_dbg(pdev, "Version:\tUnknown (0x%x)\n", akida->dw.mf);
+		pci_dbg(pdev, "Version:\tUnknown (0x%x)\n", akida->edma_chip.mf);
 		break;
 	}
-	pci_dbg(pdev, "Registers: addr(v=%p, p=%pa)\n",
-		akida->dw.rg_region.vaddr, &akida->dw.rg_region.paddr);
+	pci_dbg(pdev, "Registers: addr(v=%p)\n",
+		akida->edma_chip.reg_base);
 	pci_dbg(pdev, "Wr[0] LL:   addr(v=%p, p=%pa), sz=0x%zx bytes\n",
-		akida->dw.ll_region_wr[0].vaddr, &akida->dw.ll_region_wr[0].paddr,
-		akida->dw.ll_region_wr[0].sz);
+		akida->edma_chip.ll_region_wr[0].vaddr, &akida->edma_chip.ll_region_wr[0].paddr,
+		akida->edma_chip.ll_region_wr[0].sz);
 	pci_dbg(pdev, "Wr[0] Data: addr(v=%p, p=%pa), sz=0x%zx bytes\n",
-		akida->dw.dt_region_wr[0].vaddr, &akida->dw.dt_region_wr[0].paddr,
-		akida->dw.dt_region_wr[0].sz);
+		akida->edma_chip.dt_region_wr[0].vaddr, &akida->edma_chip.dt_region_wr[0].paddr,
+		akida->edma_chip.dt_region_wr[0].sz);
 	pci_dbg(pdev, "Wr[1] LL:   addr(v=%p, p=%pa), sz=0x%zx bytes\n",
-		akida->dw.ll_region_wr[1].vaddr, &akida->dw.ll_region_wr[1].paddr,
-		akida->dw.ll_region_wr[1].sz);
+		akida->edma_chip.ll_region_wr[1].vaddr, &akida->edma_chip.ll_region_wr[1].paddr,
+		akida->edma_chip.ll_region_wr[1].sz);
 	pci_dbg(pdev, "Wr[1] Data: addr(v=%p, p=%pa), sz=0x%zx bytes\n",
-		akida->dw.dt_region_wr[1].vaddr, &akida->dw.dt_region_wr[1].paddr,
-		akida->dw.dt_region_wr[1].sz);
+		akida->edma_chip.dt_region_wr[1].vaddr, &akida->edma_chip.dt_region_wr[1].paddr,
+		akida->edma_chip.dt_region_wr[1].sz);
 	pci_dbg(pdev, "Rd[0] LL:   addr(v=%p, p=%pa), sz=0x%zx bytes\n",
-		akida->dw.ll_region_rd[0].vaddr, &akida->dw.ll_region_rd[0].paddr,
-		akida->dw.ll_region_rd[0].sz);
+		akida->edma_chip.ll_region_rd[0].vaddr, &akida->edma_chip.ll_region_rd[0].paddr,
+		akida->edma_chip.ll_region_rd[0].sz);
 	pci_dbg(pdev, "Rd[0] Data: addr(v=%p, p=%pa), sz=0x%zx bytes\n",
-		akida->dw.dt_region_rd[0].vaddr, &akida->dw.dt_region_rd[0].paddr,
-		akida->dw.dt_region_rd[0].sz);
+		akida->edma_chip.dt_region_rd[0].vaddr, &akida->edma_chip.dt_region_rd[0].paddr,
+		akida->edma_chip.dt_region_rd[0].sz);
 	pci_dbg(pdev, "Rd[1] LL:   addr(v=%p, p=%pa), sz=0x%zx bytes\n",
-		akida->dw.ll_region_rd[1].vaddr, &akida->dw.ll_region_rd[1].paddr,
-		akida->dw.ll_region_rd[1].sz);
+		akida->edma_chip.ll_region_rd[1].vaddr, &akida->edma_chip.ll_region_rd[1].paddr,
+		akida->edma_chip.ll_region_rd[1].sz);
 	pci_dbg(pdev, "Rd[1] Data: addr(v=%p, p=%pa), sz=0x%zx bytes\n",
-		akida->dw.dt_region_rd[1].vaddr, &akida->dw.dt_region_rd[1].paddr,
-		akida->dw.dt_region_rd[1].sz);
-	pci_dbg(pdev, "Nr. IRQs: %u\n", akida->dw.nr_irqs);
+		akida->edma_chip.dt_region_rd[1].vaddr, &akida->edma_chip.dt_region_rd[1].paddr,
+		akida->edma_chip.dt_region_rd[1].sz);
+	pci_dbg(pdev, "Nr. IRQs: %u\n", akida->edma_chip.nr_irqs);
 
-	akida->edma_chip.dw = &akida->dw;
 	akida->edma_chip.dev = &pdev->dev;
 	akida->edma_chip.id = pdev->devfn;
-	akida->edma_chip.irq = pdev->irq;
 
 	/* Starting eDMA driver */
 	ret = akida_dw_edma_probe(&akida->edma_chip);
