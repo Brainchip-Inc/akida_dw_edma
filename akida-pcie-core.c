@@ -693,7 +693,7 @@ static int akida_dw_edma_pcie_irq_vector(struct device *dev, unsigned int nr)
 	return pci_irq_vector(to_pci_dev(dev), nr);
 }
 
-static const struct dw_edma_core_ops akida_dw_edma_core_ops = {
+static const struct dw_edma_plat_ops akida_dw_edma_plat_ops = {
 	.irq_vector = akida_dw_edma_pcie_irq_vector,
 };
 
@@ -853,7 +853,7 @@ static int akida_1000_probe(struct pci_dev *pdev)
 
 	akida->edma_chip.mf = EDMA_MF_EDMA_LEGACY;
 	akida->edma_chip.nr_irqs = 1;
-	akida->edma_chip.ops = &akida_dw_edma_core_ops;
+	akida->edma_chip.ops = &akida_dw_edma_plat_ops;
 
 	/* Debug info */
 	switch (akida->edma_chip.mf) {
