@@ -94,6 +94,8 @@ endif
 akida-pcie-y += akida-dw-edma/dw-edma-core.o
 akida-pcie-y += akida-dw-edma/dw-edma-v0-core.o
 akida-pcie-y += akida-dw-edma/dw-edma-v0-debugfs.o
+akida-pcie-y += akida-dw-edma/dw-hdma-v0-core.o
+akida-pcie-y += akida-dw-edma/dw-hdma-v0-debugfs.o
 
 else
 # normal makefile

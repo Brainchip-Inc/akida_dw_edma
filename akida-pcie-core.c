@@ -472,6 +472,9 @@ static const struct file_operations akida_1000_fops = {
 
 static const struct file_operations akida_1500_fops = {
 	.owner = THIS_MODULE,
+	.write = akida_write,
+	.read = akida_read,
+	.llseek = no_seek_end_llseek,
 	.mmap = akida_1500_mmap,
 };
 
@@ -540,9 +543,10 @@ static const struct akida_iatu_conf akida_1500_iatu_conf_table[] = {
 	{0}
 };
 
-static int akida_1000_setup_iatu(struct pci_dev *pdev)
+static int akida_1000_setup_iatu(struct akida_dev *akida)
 {
 	const struct akida_iatu_conf *conf = akida_1000_iatu_conf_table;
+	struct pci_dev *pdev = akida->pdev;
 	int ret;
 
 	while (conf->addr) {
@@ -561,12 +565,24 @@ static int akida_1000_setup_iatu(struct pci_dev *pdev)
 	return 0;
 }
 
-static int akida_1500_setup_iatu(struct pci_dev *pdev, void __iomem * mmio)
+static int akida_1500_setup_iatu(struct akida_dev *akida)
 {
 	const struct akida_iatu_conf *conf = akida_1500_iatu_conf_table;
+	struct pci_dev *pdev = akida->pdev;
+	int ret;
+
+	/* Mapping PCI BAR regions:
+	 *  - BAR0: IATU regs and eDMA regs
+	 */
+	ret = pcim_iomap_regions(pdev, BIT(BAR_0), pci_name(pdev));
+	if (ret) {
+		pci_err(pdev, "BAR I/O remapping failed (%d)\n", ret);
+		return ret;
+	}
+	akida->mmio_bar0 = pcim_iomap_table(pdev)[BAR_0];
 
 	while (conf->addr) {
-		writel(conf->val, mmio + conf->addr);
+		writel(conf->val, akida->mmio_bar0 + conf->addr);
 		conf++;
 	}
 
@@ -574,6 +590,35 @@ static int akida_1500_setup_iatu(struct pci_dev *pdev, void __iomem * mmio)
 	msleep(1000);
 
 	return 0;
+}
+
+static int akida_1000_setup_iomap(struct pci_dev *pdev)
+{
+	/* PCI BAR regions:
+	 *  - BAR2: eDMA regs,
+	 *  - BAR4: eDMA linked-list and data
+	 */
+	return pcim_iomap_regions(pdev, BIT(BAR_2) | BIT(BAR_4), pci_name(pdev));
+}
+
+static int akida_1500_setup_iomap(struct pci_dev *pdev)
+{
+	/* PCI BAR regions:
+	 *  - BAR4: eDMA linked-list and data
+	 */
+	return pcim_iomap_regions(pdev, BIT(BAR_4), pci_name(pdev));
+}
+
+
+static void akida_1000_setup_dma_reg_base(struct akida_dev *akida)
+{
+	akida->edma_chip.reg_base = pcim_iomap_table(akida->pdev)[BAR_2];
+	akida->edma_chip.reg_base += 0x00000970;
+}
+
+static void akida_1500_setup_dma_reg_base(struct akida_dev *akida)
+{
+	akida->edma_chip.reg_base = pcim_iomap_table(akida->pdev)[BAR_0];
 }
 
 struct akida_filter_param {
@@ -697,10 +742,50 @@ static const struct dw_edma_plat_ops akida_dw_edma_plat_ops = {
 	.irq_vector = akida_dw_edma_pcie_irq_vector,
 };
 
-static int akida_1000_probe(struct pci_dev *pdev)
+struct akida_ops {
+	char miscdev_name[10];
+	int (*setup_iatu)(struct akida_dev *akida);
+	int (*setup_iomap)(struct pci_dev *pdev);
+	void (*setup_dma_reg_base)(struct akida_dev *akida);
+	const struct file_operations *fops;
+	enum dw_edma_map_format mf;
+};
+
+static struct akida_ops akida_1000_ops = {
+	.miscdev_name = "akida",
+	.setup_iatu = akida_1000_setup_iatu,
+	.setup_iomap = akida_1000_setup_iomap,
+	.setup_dma_reg_base = akida_1000_setup_dma_reg_base,
+	.fops = &akida_1000_fops,
+	.mf = EDMA_MF_EDMA_LEGACY,
+};
+
+static struct akida_ops akida_1500_ops = {
+	.miscdev_name = "akd1500_",
+	.setup_iatu = akida_1500_setup_iatu,
+	.setup_iomap = akida_1500_setup_iomap,
+	.setup_dma_reg_base = akida_1500_setup_dma_reg_base,
+	.fops = &akida_1500_fops,
+	.mf = EDMA_MF_HDMA_NATIVE,
+};
+
+static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 {
+	int board_id = id->driver_data;
 	struct akida_dev *akida;
+	struct akida_ops ops;
 	int ret, nr_irqs;
+
+	switch (board_id) {
+	case AKIDA_1000:
+		ops = akida_1000_ops;
+		break;
+	case AKIDA_1500:
+		ops = akida_1500_ops;
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
 
 	akida = devm_kzalloc(&pdev->dev, sizeof(*akida), GFP_KERNEL);
 	if (!akida)
@@ -711,13 +796,6 @@ static int akida_1000_probe(struct pci_dev *pdev)
 	/* Disable ASPM L0s and L1 states as they cause device stop working */
 	pci_disable_link_state(pdev, PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1);
 
-	/* Setup iATU */
-	ret = akida_1000_setup_iatu(pdev);
-	if (ret) {
-		pci_err(pdev, "seting up iATU failed (%d)\n", ret);
-		return ret;
-	}
-
 	/* Enable PCI device */
 	ret = pcim_enable_device(pdev);
 	if (ret) {
@@ -727,11 +805,15 @@ static int akida_1000_probe(struct pci_dev *pdev)
 
 	pci_set_master(pdev);
 
-	/* Mapping PCI BAR regions:
-	 *  - BAR2: eDMA regs,
-	 *  - BAR4: eDMA linked-list and data
-	 */
-	ret = pcim_iomap_regions(pdev, BIT(BAR_2) | BIT(BAR_4), pci_name(pdev));
+	/* Setup iATU */
+	ret = ops.setup_iatu(akida);
+	if (ret) {
+		pci_err(pdev, "seting up iATU failed (%d)\n", ret);
+		return ret;
+	}
+
+	/* Mapping PCI BAR regions */
+	ret = ops.setup_iomap(pdev);
 	if (ret) {
 		pci_err(pdev, "BAR I/O remapping failed (%d)\n", ret);
 		return ret;
@@ -793,8 +875,7 @@ static int akida_1000_probe(struct pci_dev *pdev)
 	}
 
 	/* Setup eDMA engine */
-	akida->edma_chip.reg_base = pcim_iomap_table(pdev)[BAR_2];
-	akida->edma_chip.reg_base += 0x00000970;
+	ops.setup_dma_reg_base(akida);
 
 	/* 2 write and 2 read channels */
 	akida->edma_chip.ll_wr_cnt = 2;
@@ -851,7 +932,7 @@ static int akida_1000_probe(struct pci_dev *pdev)
 	akida->edma_chip.dt_region_rd[1].paddr += AKIDA_DMA_RAM_PHY_DT_OFFSET(RX,1);
 	akida->edma_chip.dt_region_rd[1].sz = AKIDA_DMA_RAM_PHY_DT_SIZE(RX,1);
 
-	akida->edma_chip.mf = EDMA_MF_EDMA_LEGACY;
+	akida->edma_chip.mf = ops.mf;
 	akida->edma_chip.nr_irqs = 1;
 	akida->edma_chip.ops = &akida_dw_edma_plat_ops;
 
@@ -865,6 +946,9 @@ static int akida_1000_probe(struct pci_dev *pdev)
 		break;
 	case EDMA_MF_HDMA_COMPAT:
 		pci_dbg(pdev, "Version: HDMA Compatible (0x%x)\n", akida->edma_chip.mf);
+		break;
+	case EDMA_MF_HDMA_NATIVE:
+		pci_dbg(pdev, "Version: HDMA Native (0x%x)\n", akida->edma_chip.mf);
 		break;
 	default:
 		pci_dbg(pdev, "Version:\tUnknown (0x%x)\n", akida->edma_chip.mf);
@@ -936,8 +1020,9 @@ static int akida_1000_probe(struct pci_dev *pdev)
 	/* Declare misc device */
 	akida->miscdev.minor = MISC_DYNAMIC_MINOR;
 	akida->miscdev.name = devm_kasprintf(&pdev->dev, GFP_KERNEL,
-					     "akida%d", akida->devno);
-	akida->miscdev.fops = &akida_1000_fops;
+					     "%s%d", ops.miscdev_name,
+					     akida->devno);
+	akida->miscdev.fops = ops.fops;
 	akida->miscdev.parent = &pdev->dev;
 
 	pci_set_drvdata(pdev, akida);
@@ -965,103 +1050,6 @@ fail_dw_edma_remove:
 fail_free_irq_vectors:
 	pci_free_irq_vectors(pdev);
 	return ret;
-}
-
-
-static int akida_1500_probe(struct pci_dev *pdev)
-{
-	struct akida_dev *akida;
-	int ret;
-
-	akida = devm_kzalloc(&pdev->dev, sizeof(*akida), GFP_KERNEL);
-	if (!akida)
-		return -ENOMEM;
-
-	akida->pdev = pdev;
-
-	/* Disable ASPM L0s and L1 states as they cause device stop working */
-	pci_disable_link_state(pdev, PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1);
-
-	/* Enable PCI device */
-	ret = pcim_enable_device(pdev);
-	if (ret) {
-		pci_err(pdev, "enabling device failed (%d)\n", ret);
-		return ret;
-	}
-
-	pci_set_master(pdev);
-
-	/* Mapping PCI BAR regions:
-	 *  - BAR0: IATU regs and eDMA regs
-	 */
-	ret = pcim_iomap_regions(pdev, BIT(BAR_0), pci_name(pdev));
-	if (ret) {
-		pci_err(pdev, "BAR I/O remapping failed (%d)\n", ret);
-		return ret;
-	}
-	akida->mmio_bar0 = pcim_iomap_table(pdev)[BAR_0];
-
-	/* Setup iATU */
-	ret = akida_1500_setup_iatu(pdev, akida->mmio_bar0);
-	if (ret) {
-		pci_err(pdev, "seting up iATU failed (%d)\n", ret);
-		return ret;
-	}
-
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
-	ret = ida_simple_get(&akida_devno, 0, 0, GFP_KERNEL);
-	if (ret < 0) {
-		pci_err(pdev, "ida simple get failed (%d)\n", ret);
-		return ret;
-	}
-#else
-	ret = ida_alloc(&akida_devno, GFP_KERNEL);
-	if (ret < 0) {
-		pci_err(pdev, "ida alloc failed (%d)\n", ret);
-		return ret;
-	}
-#endif
-	akida->devno = ret;
-
-	/* Declare misc device */
-	akida->miscdev.minor = MISC_DYNAMIC_MINOR;
-	akida->miscdev.name = devm_kasprintf(&pdev->dev, GFP_KERNEL,
-					     "akd1500_%d", akida->devno);
-	akida->miscdev.fops = &akida_1500_fops;
-	akida->miscdev.parent = &pdev->dev;
-
-	pci_set_drvdata(pdev, akida);
-
-	ret = misc_register(&akida->miscdev);
-	if (ret) {
-		pci_err(pdev, "Cannot register misc device (%d)\n", ret);
-		goto fail_ida_alloc;
-	}
-
-	pci_info(pdev, "probed (%s)\n", akida->miscdev.name);
-
-	return 0;
-
-fail_ida_alloc:
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
-	ida_simple_remove(&akida_devno, akida->devno);
-#else
-	ida_free(&akida_devno, akida->devno);
-#endif
-	return ret;
-}
-
-static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
-{
-	int board_id = id->driver_data;
-	switch (board_id) {
-	case AKIDA_1000:
-		return akida_1000_probe(pdev);
-	case AKIDA_1500:
-		return akida_1500_probe(pdev);
-	default:
-		return -EOPNOTSUPP;
-	}
 }
 
 static void akida_remove(struct pci_dev *pdev)
