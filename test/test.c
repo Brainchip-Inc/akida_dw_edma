@@ -35,7 +35,7 @@ static int test1(int fd, int is_verbose, const char *devpath, off_t test_area)
 	int err;
 
 	size = 4;
-	offset = 0xf0000010;
+	offset = 0xfcc00050;
 	ssize = pread(fd, buff, size, offset);
 	if (ssize < 0) {
 		err = errno;
@@ -127,18 +127,19 @@ static int test2(int fd, int is_verbose, const char *devpath, off_t test_area)
 
 static int test3(int fd, int is_verbose, const char *devpath, off_t test_area)
 {
-#define TEST3_BUFFER_SIZE (1*1024*1024/sizeof(uint32_t))
-	uint32_t buff[2][TEST3_BUFFER_SIZE];
+#define TEST3_BUFFER_SIZE (128*1024)
+#define TEST3_BUFFER_LENGTH (TEST3_BUFFER_SIZE/sizeof(uint32_t))
+	uint32_t buff[2][TEST3_BUFFER_LENGTH];
 	size_t size;
 	off_t offset;
 	ssize_t ssize;
 	int err;
 
-	for (size = 0; size < TEST3_BUFFER_SIZE; size++) {
+	for (size = 0; size < TEST3_BUFFER_LENGTH; size++) {
 		buff[0][size] = size;
 	}
 
-	size = TEST3_BUFFER_SIZE * sizeof(buff[0][0]);
+	size = TEST3_BUFFER_LENGTH * sizeof(buff[0][0]);
 	offset = test_area;
 	ssize = pwrite(fd, buff[0], size, offset);
 	if (ssize < 0) {
@@ -156,7 +157,7 @@ static int test3(int fd, int is_verbose, const char *devpath, off_t test_area)
 	if (is_verbose)
 		printf("Wr @0x%04lx, %zu\n", offset, size);
 
-	size = TEST3_BUFFER_SIZE * sizeof(buff[1][0]);
+	size = TEST3_BUFFER_LENGTH * sizeof(buff[1][0]);
 	offset = test_area;
 	ssize = pread(fd, buff[1], size, offset);
 	if (ssize < 0) {
@@ -174,9 +175,9 @@ static int test3(int fd, int is_verbose, const char *devpath, off_t test_area)
 	if (is_verbose)
 		printf("Rd @0x%04lx, %zu\n", offset, size);
 
-	for (size = 0; size < TEST3_BUFFER_SIZE; size++) {
+	for (size = 0; size < TEST3_BUFFER_LENGTH; size++) {
 		if (buff[0][size] != buff[1][size]) {
-			printf("Mismatch at offset %zu (read 0x%04"PRIx16", exp 0x%04"PRIx16")\n",
+			printf("Mismatch at offset %zu (read 0x%08"PRIx32", exp 0x%08"PRIx32")\n",
 				size,
 				buff[1][size],
 				buff[0][size]);
@@ -283,7 +284,7 @@ static int test_multithread(int fd, int is_verbose, const char *devpath, off_t t
 	p[1].devpath = devpath;
 	p[1].fd = fd1;
 	p[1].is_verbose = is_verbose;
-	p[1].test_area = test_area + 1*1024*1024; /* Do not overlap with other thread */
+	p[1].test_area = test_area + 1 * TEST3_BUFFER_SIZE ; /* Do not overlap with other thread */
 	p[1].nb_loop = nb_loop;
 	p[1].is_verbose = is_verbose;
 	p[1].err = EINPROGRESS;
@@ -292,7 +293,7 @@ static int test_multithread(int fd, int is_verbose, const char *devpath, off_t t
 	p[2].devpath = devpath;
 	p[2].fd = fd2;
 	p[2].is_verbose = is_verbose;
-	p[2].test_area = test_area + 2*1024*1024; /* Do not overlap with other thread */
+	p[2].test_area = test_area + 2 * TEST3_BUFFER_SIZE; /* Do not overlap with other thread */
 	p[2].nb_loop = nb_loop;
 	p[2].is_verbose = is_verbose;
 	p[2].err = EINPROGRESS;
@@ -381,8 +382,6 @@ int main(int argc, char* argv[])
 	else
 		devpath = argv[1];
 
-
-
 	fd = open(devpath, O_RDWR | O_NONBLOCK);
 	if (fd < 0) {
 		err = errno;
@@ -396,7 +395,7 @@ int main(int argc, char* argv[])
 	test = tab_test;
 	do {
 		printf("-- %s\n", test->name);
-		err = test->tst_fct(fd, 1, devpath, 0x20400000);
+		err = test->tst_fct(fd, 1, devpath, 0x20000100);
 		printf("-- %s %s\n", test->name, err ? "FAILED" : "ok");
 		if (err)
 			failed++;
