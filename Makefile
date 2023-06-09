@@ -57,10 +57,11 @@ ifneq ($(CFG_AKIDA_DMA_RAM_PHY),)
 # CFG_AKIDA_DMA_RAM_PHY activated -> Set needed 'define'
 
 define AKIDA_DEFINE_IF_SET
-$(if $($(strip $(1))),-D$(strip $(1))=$($(strip $(1))))
+$(if $($(strip $(1))),-D'$(strip $(1))=$($(strip $(1)))')
 endef
 
 CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_ADDR)
+CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_OFFSET)
 
 CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX0_LL_OFFSET)
 CFLAGS_akida-pcie-core.o += $(call AKIDA_DEFINE_IF_SET, AKIDA_DMA_RAM_PHY_TX0_LL_SIZE)
