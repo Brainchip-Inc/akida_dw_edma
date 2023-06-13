@@ -1,5 +1,5 @@
-This directory (akida-dw-edma) contains a copy/paste of kernel v5.16 sources
-drivers/dma/dw-edma/ files.
+This directory (akida-dw-edma) contains a copy/paste of kernel v6.4 sources
+drivers/dma/dw-edma/ files with few fixes send mainline.
 
 This files are used to embed the dw-edma engine in the akida driver and so
 avoid the usage of the kernel dw-edma module.
@@ -16,3 +16,4 @@ perform the following steps:
 - Change the include path
 - Rename the exported symbols
 - Update akida-edma.h if needed
+- Update kernel/common/include/edma.h if needed
