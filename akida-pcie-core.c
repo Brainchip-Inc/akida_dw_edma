@@ -68,6 +68,9 @@ static DEFINE_IDA(akida_devno);
 
 #define AKIDA_1500_BAR2_OFFSET 0xFCC00000
 #define AKIDA_1500_BAR4_OFFSET 0x20000000
+#define AKIDA_1500_HOST_DDR_BASE 0xC0000000
+#define AKIDA_1500_HOST_DDR_SIZE SZ_16M
+#define AKIDA_1500_HOST_DDR_DMA_ATTRS DMA_ATTR_NO_KERNEL_MAPPING
 
 struct akida_dma_chan {
 	struct dma_chan *chan;
@@ -89,6 +92,10 @@ struct akida_dev {
 	wait_queue_head_t wq_rxchan;
 	wait_queue_head_t wq_txchan;
 	void __iomem *mmio_bar0;
+	struct {
+		void *cpu_addr;
+		dma_addr_t dma_addr;
+	} host_ddr;
 };
 
 enum {
@@ -437,13 +444,15 @@ static int akida_1500_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct akida_dev *akida =
 		container_of(file->private_data, struct akida_dev, miscdev);
-	unsigned long start [2], size[2];
+	unsigned long start [3], size[3];
 	unsigned int bar;
 
 	start[0] = AKIDA_1500_BAR2_OFFSET >> PAGE_SHIFT;
 	start[1] = AKIDA_1500_BAR4_OFFSET >> PAGE_SHIFT;
+	start[2] = AKIDA_1500_HOST_DDR_BASE >> PAGE_SHIFT;
 	size[0] = ((pci_resource_len(akida->pdev, BAR_2) - 1) >> PAGE_SHIFT) + 1;
 	size[1] = ((pci_resource_len(akida->pdev, BAR_4) - 1) >> PAGE_SHIFT) + 1;
+	size[2] = ((AKIDA_1500_HOST_DDR_SIZE - 1) >> PAGE_SHIFT) + 1;
 
 	if (start[0] <= vma->vm_pgoff &&
 	    (vma->vm_pgoff + vma_pages(vma)) <= (start[0] + size[0])) {
@@ -453,6 +462,12 @@ static int akida_1500_mmap(struct file *file, struct vm_area_struct *vma)
 		   (vma->vm_pgoff + vma_pages(vma)) <= (start[1] + size[1])) {
 		bar = BAR_4;
 		vma->vm_pgoff -= start[1];
+	} else if (start[2] <= vma->vm_pgoff &&
+		   (vma->vm_pgoff + vma_pages(vma)) <= (start[2] + size[2])) {
+		vma->vm_pgoff -= start[2];
+		return dma_mmap_attrs(&akida->pdev->dev, vma,
+			akida->host_ddr.cpu_addr, akida->host_ddr.dma_addr,
+			AKIDA_1500_HOST_DDR_BASE, AKIDA_1500_HOST_DDR_DMA_ATTRS);
 	} else
 		return -EINVAL;
 
@@ -521,6 +536,20 @@ static const struct akida_iatu_conf akida_1000_iatu_conf_table[] = {
 	{0}
 };
 
+static int akida_1500_setup_host_ddr(struct akida_dev *akida)
+{
+	akida->host_ddr.cpu_addr = dma_alloc_attrs(&akida->pdev->dev,
+		AKIDA_1500_HOST_DDR_SIZE, &akida->host_ddr.dma_addr,
+		GFP_KERNEL, AKIDA_1500_HOST_DDR_DMA_ATTRS);
+
+	if (!akida->host_ddr.cpu_addr) {
+		pci_err(akida->pdev, "Failed to allocate host ddr area\n");
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
 static const struct akida_iatu_conf akida_1500_iatu_conf_table[] = {
 	/* Akida BAR
 	 * EP_iATU Region 1 Inbound Setting
@@ -585,6 +614,18 @@ static int akida_1500_setup_iatu(struct akida_dev *akida)
 		writel(conf->val, akida->mmio_bar0 + conf->addr);
 		conf++;
 	}
+
+	/* Host DDR
+	 * EP_iATU Region 0 Outbound Setting
+	 */
+	writel(0x00000000, akida->mmio_bar0 + 0x404);
+	writel(0x00000000, akida->mmio_bar0 + 0x400);
+	writel(AKIDA_1500_HOST_DDR_BASE, akida->mmio_bar0 + 0x408);
+	writel(0x00000000, akida->mmio_bar0 + 0x40c);
+	writel(AKIDA_1500_HOST_DDR_BASE + AKIDA_1500_HOST_DDR_SIZE - 1, akida->mmio_bar0 + 0x410);
+	writel(lower_32_bits(akida->host_ddr.dma_addr), akida->mmio_bar0 + 0x414);
+	writel(upper_32_bits(akida->host_ddr.dma_addr), akida->mmio_bar0 + 0x418);
+	writel(0x80000000, akida->mmio_bar0 + 0x404);
 
 	/* Provide 1000ms sleep for iATU's to be setup */
 	msleep(1000);
@@ -744,6 +785,7 @@ static const struct dw_edma_plat_ops akida_dw_edma_plat_ops = {
 
 struct akida_ops {
 	char miscdev_name[10];
+	int (*setup_host_ddr)(struct akida_dev *akida);
 	int (*setup_iatu)(struct akida_dev *akida);
 	int (*setup_iomap)(struct pci_dev *pdev);
 	void (*setup_dma_reg_base)(struct akida_dev *akida);
@@ -762,6 +804,7 @@ static struct akida_ops akida_1000_ops = {
 
 static struct akida_ops akida_1500_ops = {
 	.miscdev_name = "akd1500_",
+	.setup_host_ddr = akida_1500_setup_host_ddr,
 	.setup_iatu = akida_1500_setup_iatu,
 	.setup_iomap = akida_1500_setup_iomap,
 	.setup_dma_reg_base = akida_1500_setup_dma_reg_base,
@@ -841,6 +884,15 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 #endif
 		if (ret) {
 			pci_err(pdev, "consistent DMA mask 32 set failed (%d)\n", ret);
+			return ret;
+		}
+	}
+
+	/* Setup host DDR area */
+	if (ops.setup_host_ddr) {
+		ret = ops.setup_host_ddr(akida);
+		if (ret) {
+			pci_err(pdev, "seting up host ddr area failed (%d)\n", ret);
 			return ret;
 		}
 	}
