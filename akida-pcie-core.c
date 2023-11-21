@@ -805,20 +805,6 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	pci_set_master(pdev);
 
-	/* Setup iATU */
-	ret = ops.setup_iatu(akida);
-	if (ret) {
-		pci_err(pdev, "seting up iATU failed (%d)\n", ret);
-		return ret;
-	}
-
-	/* Mapping PCI BAR regions */
-	ret = ops.setup_iomap(pdev);
-	if (ret) {
-		pci_err(pdev, "BAR I/O remapping failed (%d)\n", ret);
-		return ret;
-	}
-
 	/* DMA configuration */
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 17, 0)
 	ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(64));
@@ -857,6 +843,20 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 			pci_err(pdev, "consistent DMA mask 32 set failed (%d)\n", ret);
 			return ret;
 		}
+	}
+
+	/* Setup iATU */
+	ret = ops.setup_iatu(akida);
+	if (ret) {
+		pci_err(pdev, "seting up iATU failed (%d)\n", ret);
+		return ret;
+	}
+
+	/* Mapping PCI BAR regions */
+	ret = ops.setup_iomap(pdev);
+	if (ret) {
+		pci_err(pdev, "BAR I/O remapping failed (%d)\n", ret);
+		return ret;
 	}
 
 	/* IRQs allocation */
