@@ -446,11 +446,11 @@ static int akida_1500_mmap(struct file *file, struct vm_area_struct *vma)
 	size[1] = ((pci_resource_len(akida->pdev, BAR_4) - 1) >> PAGE_SHIFT) + 1;
 
 	if (start[0] <= vma->vm_pgoff &&
-	    (vma->vm_pgoff + vma_pages(vma)) < (start[0] + size[0])) {
+	    (vma->vm_pgoff + vma_pages(vma)) <= (start[0] + size[0])) {
 		bar = BAR_2;
 		vma->vm_pgoff -= start[0];
 	} else if (start[1] <= vma->vm_pgoff &&
-		   (vma->vm_pgoff + vma_pages(vma)) < (start[1] + size[1])) {
+		   (vma->vm_pgoff + vma_pages(vma)) <= (start[1] + size[1])) {
 		bar = BAR_4;
 		vma->vm_pgoff -= start[1];
 	} else
