@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS ?= -Wall -Wextra -Werror -Wno-unused-parameter -pthread
+CFLAGS ?= -O3 -Wall -Wextra -Werror -Wno-unused-parameter -pthread
 LDFLAGS ?= -pthread
 
 ifeq ($(V),)
