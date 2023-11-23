@@ -5,7 +5,7 @@ ifneq ($(KERNELRELEASE),)
 # copied in kernel/x.y/ subdirectory depending on kernel API changes.
 # These files are drivers/dma/dmaengine.h and drivers/dma/virt-dma.h
 AKIDA_KERNEL_VERSION_RANK := $(shell \
-	printf "$(VERSION).$(PATCHLEVEL)\n5.4\n5.6\n5.7\n5.9\n5.16\n6.4\n" | \
+	printf "$(VERSION).$(PATCHLEVEL)\n5.4\n5.6\n5.7\n5.9\n5.16\n6.7\n" | \
 	sort -V )
 
 ifneq ($(word 1,$(AKIDA_KERNEL_VERSION_RANK)), 5.4)
@@ -38,7 +38,7 @@ akida-pcie-y += akida-dw-edma/dw-edma-v0-core.o
 akida-pcie-y += akida-dw-edma/dw-edma-v0-debugfs.o
 akida-pcie-y += akida-dw-edma/dw-hdma-v0-core.o
 akida-pcie-y += akida-dw-edma/dw-hdma-v0-debugfs.o
-else ifneq ($(word 6,$(AKIDA_KERNEL_VERSION_RANK)), 6.4)
+else ifneq ($(word 6,$(AKIDA_KERNEL_VERSION_RANK)), 6.7)
 ccflags-y += -I$(src)/kernel/5.16/drivers/dma
 akida-pcie-y += akida-dw-edma/dw-edma-core.o
 akida-pcie-y += akida-dw-edma/dw-edma-v0-core.o
