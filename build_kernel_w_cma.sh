@@ -49,7 +49,7 @@ chmod a+x debian/scripts/misc/*
 cp /boot/config-$(uname -r) ./.config
 
 # Modify configuration to enable CMA
-MBYTES_CMA=32
+MBYTES_CMA=64
 echo "CONFIG_CMA=y" >> ./.config
 echo "CONFIG_CMA_SIZE_MBYTES=$MBYTES_CMA" >> ./.config
 echo "CONFIG_CMA_SIZE_SEL_MBYTES=y" >> ./.config
@@ -63,7 +63,7 @@ echo "👉 Kernel will now be built, this might take a while."
 echo
 echo
 
-make -j deb-pkg LOCALVERSION=-cma-akd1500
+make deb-pkg LOCALVERSION=-cma-akd1500
 
 echo
 echo
