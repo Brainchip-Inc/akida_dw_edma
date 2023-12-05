@@ -364,7 +364,7 @@ static enum test_result test_host_ddr_size(struct mmap_area *ddr, struct mmap_ar
 
 	/* Initialize the source data */
 	for (count = 0; count < data_size/sizeof(uint32_t); count++)
-		*(data_src + count) = count;
+		*(data_src + count) = mmap_area_virt2phy(ddr, data_dst) + count;
 
 	timestamp_get(&tend);
 	if (is_verbose)
