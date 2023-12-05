@@ -251,6 +251,11 @@ static enum test_result test_host_ddr_simple(struct mmap_area *ddr, struct mmap_
 	int count;
 	int err;
 
+	if (ddr->size < 0x3000 + ((8 + 4) * sizeof(uint32_t))) {
+		printf("   min ddr size needed: %zu bytes\n",
+			0x3000 + ((8 + 4) * sizeof(uint32_t)));
+		return TEST_NOTDONE;
+	}
 
 	desc     = ddr->virt_addr + 0x1000;
 	data_src = ddr->virt_addr + 0x2000;
@@ -340,6 +345,10 @@ static enum test_result test_host_ddr_size(struct mmap_area *ddr, struct mmap_ar
 	if (data_size > 0x7fffe0) {
 		fprintf(stderr,"xfer size %zu (0x%zx), max supported %u (0x%x)\n",
 			data_size, data_size, 0x7fffe0, 0x7fffe0);
+		return TEST_NOTDONE;
+	}
+	if (ddr->size < 0x1000000) {
+		printf("   min ddr size needed: 0x1000000 bytes\n");
 		return TEST_NOTDONE;
 	}
 	desc = ddr->virt_addr;
