@@ -342,18 +342,17 @@ static enum test_result test_host_ddr_size(struct mmap_area *ddr, struct mmap_ar
 	 * @0x00800000-0x00ffffff: data dst size 0x20 + up to 0x7fffe0
 	 */
 	data_size = param;
-	if (data_size > 0x7fffe0) {
-		fprintf(stderr,"xfer size %zu (0x%zx), max supported %u (0x%x)\n",
-			data_size, data_size, 0x7fffe0, 0x7fffe0);
+	if (ddr->size < (data_size + 0x20) * 2) {
+		printf("   min ddr size needed: %zu bytes\n", (data_size + 0x20) * 2);
 		return TEST_NOTDONE;
 	}
-	if (ddr->size < 0x1000000) {
-		printf("   min ddr size needed: 0x1000000 bytes\n");
+	if (data_size % 4) {
+		printf("   data size 0x%zx must be aligned on 4 bytes\n", data_size);
 		return TEST_NOTDONE;
 	}
 	desc = ddr->virt_addr;
 	data_src = ddr->virt_addr + 0x00000020;
-	data_dst = ddr->virt_addr + 0x00800000;
+	data_dst = ddr->virt_addr + 0x20 + data_size;
 
 	/* AKD1500 DMA Reset, issued from RC */
 	dma_reset(dma);
@@ -466,7 +465,7 @@ static int do_tests(struct mmap_area *ddr, struct mmap_area *dma, struct tests_s
 		{ "test_host_ddr simple", test_host_ddr_simple, 0 },
 		{ "test_host_ddr   32", test_host_ddr_size, 32 },
 		{ "test_host_ddr  256", test_host_ddr_size, 256 },
-		{ "test_host_ddr 1234", test_host_ddr_size, 1234 },
+		{ "test_host_ddr 1236", test_host_ddr_size, 1236 },
 		{ "test_host_ddr 4096", test_host_ddr_size, 4096 },
 		{ "test_host_ddr 8000", test_host_ddr_size, 8000 },
 		{ "test_host_ddr  1MB", test_host_ddr_size, 1*1024*1024 },
