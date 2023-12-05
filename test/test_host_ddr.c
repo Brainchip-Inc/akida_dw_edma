@@ -259,7 +259,8 @@ static enum test_result test_host_ddr_simple(struct mmap_area *ddr, struct mmap_
 	data_dst = ddr->virt_addr + 0x3000;
 
 	if (is_verbose)
-		printf("   xfer size: %zu bytes\n", 4 * sizeof(uint32_t));
+		printf("   xfer size: %zu (0x%zx) bytes\n",
+			4 * sizeof(uint32_t), 4 * sizeof(uint32_t));
 
 	timestamp_get(&tstart);
 
@@ -348,7 +349,7 @@ static enum test_result test_host_ddr_size(struct mmap_area *ddr, struct mmap_ar
 	data_dst = ddr->virt_addr + 0x00800000;
 
 	if (is_verbose)
-		printf("   xfer size: %zu bytes\n", data_size);
+		printf("   xfer size: %zu (0x%zx) bytes\n", data_size, data_size);
 
 	timestamp_get(&tstart);
 
