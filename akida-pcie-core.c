@@ -538,7 +538,7 @@ static const struct akida_iatu_conf akida_1000_iatu_conf_table[] = {
 
 static int akida_1500_setup_host_ddr(struct akida_dev *akida)
 {
-	akida->host_ddr.cpu_addr = dma_alloc_attrs(&akida->pdev->dev,
+	akida->host_ddr.cpu_addr = dmam_alloc_attrs(&akida->pdev->dev,
 		AKIDA_1500_HOST_DDR_SIZE, &akida->host_ddr.dma_addr,
 		GFP_KERNEL, AKIDA_1500_HOST_DDR_DMA_ATTRS);
 
