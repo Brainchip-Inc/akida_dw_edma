@@ -42,12 +42,8 @@ static int mmap_area_init(struct mmap_area *mmap_area, const char *devpath, uint
 			MAP_SHARED, fd, phy_addr);
 
 	close(fd);
-	if (mmap_area->virt_addr == MAP_FAILED) {
-		err = errno;
-		fprintf(stderr,"mmap(%s, %zu, 0x%"PRIx32") failed (%d-%s)\n",
-			devpath, size, phy_addr, err, strerror(err));
-		return err;
-	}
+	if (mmap_area->virt_addr == MAP_FAILED)
+		return errno;
 
 	mmap_area->phy_addr = phy_addr;
 	mmap_area->size = size;
@@ -506,6 +502,7 @@ int main(int argc, char* argv[])
 	const char *devpath;
 	struct mmap_area dma;
 	struct mmap_area ddr;
+	size_t size;
 	int failed;
 	int err;
 
@@ -525,13 +522,25 @@ int main(int argc, char* argv[])
 	}
 
 	/* mmap the area related to the host DDR area */
-	err = mmap_area_init(&ddr, devpath, 0xc0000000, 16*1024*1024);
+	size = 16*1024*1024;
+	do {
+		err = mmap_area_init(&ddr, devpath, 0xc0000000, size);
+		if (!err) {
+			printf("host ddr area: mmap %zu (0x%zx) bytes\n",
+				ddr.size, ddr.size);
+			break;
+		}
+		printf("mmap_area_init(%s, 0xc0000000, %zu) failed -> Retry smaller\n",
+			devpath, size);
+		size /= 2;
+	} while (size >= 1*1024*1024);
 	if (err) {
-		fprintf(stderr,"mmap_area_init(%s, 0xc0000000, 8*1024*1024) failed (%d-%s)\n",
-			devpath, err, strerror(err));
+		fprintf(stderr,"mmap_area_init(%s, 0xc0000000, %zu) failed (%d-%s) -> Abort\n",
+			devpath, size, err, strerror(err));
 		mmap_area_exit(&dma);
 		return 1;
 	}
+	printf("host ddr area: %zu (0x%zx) bytes\n", ddr.size, ddr.size);
 
 	/* Raz test stats */
 	memset(&stats, 0, sizeof(stats));
