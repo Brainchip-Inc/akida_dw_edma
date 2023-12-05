@@ -69,8 +69,9 @@ static DEFINE_IDA(akida_devno);
 #define AKIDA_1500_BAR2_OFFSET 0xFCC00000
 #define AKIDA_1500_BAR4_OFFSET 0x20000000
 #define AKIDA_1500_HOST_DDR_BASE 0xC0000000
-#define AKIDA_1500_HOST_DDR_SIZE SZ_4M
-#define AKIDA_1500_HOST_DDR_DMA_ATTRS DMA_ATTR_NO_KERNEL_MAPPING
+#define AKIDA_1500_HOST_DDR_SIZE_MAX  SZ_16M
+#define AKIDA_1500_HOST_DDR_SIZE_MIN  SZ_1M
+#define AKIDA_1500_HOST_DDR_DMA_ATTRS (DMA_ATTR_NO_KERNEL_MAPPING | DMA_ATTR_NO_WARN)
 
 struct akida_dma_chan {
 	struct dma_chan *chan;
@@ -95,6 +96,7 @@ struct akida_dev {
 	struct {
 		void *cpu_addr;
 		dma_addr_t dma_addr;
+		size_t size;
 	} host_ddr;
 };
 
@@ -452,7 +454,7 @@ static int akida_1500_mmap(struct file *file, struct vm_area_struct *vma)
 	start[2] = AKIDA_1500_HOST_DDR_BASE >> PAGE_SHIFT;
 	size[0] = ((pci_resource_len(akida->pdev, BAR_2) - 1) >> PAGE_SHIFT) + 1;
 	size[1] = ((pci_resource_len(akida->pdev, BAR_4) - 1) >> PAGE_SHIFT) + 1;
-	size[2] = ((AKIDA_1500_HOST_DDR_SIZE - 1) >> PAGE_SHIFT) + 1;
+	size[2] = ((akida->host_ddr.size - 1) >> PAGE_SHIFT) + 1;
 
 	if (start[0] <= vma->vm_pgoff &&
 	    (vma->vm_pgoff + vma_pages(vma)) <= (start[0] + size[0])) {
@@ -462,7 +464,7 @@ static int akida_1500_mmap(struct file *file, struct vm_area_struct *vma)
 		   (vma->vm_pgoff + vma_pages(vma)) <= (start[1] + size[1])) {
 		bar = BAR_4;
 		vma->vm_pgoff -= start[1];
-	} else if (start[2] <= vma->vm_pgoff &&
+	} else if (akida->host_ddr.size && start[2] <= vma->vm_pgoff &&
 		   (vma->vm_pgoff + vma_pages(vma)) <= (start[2] + size[2])) {
 		vma->vm_pgoff -= start[2];
 		return dma_mmap_attrs(&akida->pdev->dev, vma,
@@ -538,15 +540,28 @@ static const struct akida_iatu_conf akida_1000_iatu_conf_table[] = {
 
 static int akida_1500_setup_host_ddr(struct akida_dev *akida)
 {
-	akida->host_ddr.cpu_addr = dmam_alloc_attrs(&akida->pdev->dev,
-		AKIDA_1500_HOST_DDR_SIZE, &akida->host_ddr.dma_addr,
-		GFP_KERNEL, AKIDA_1500_HOST_DDR_DMA_ATTRS);
+	akida->host_ddr.size = AKIDA_1500_HOST_DDR_SIZE_MAX;
+	while (akida->host_ddr.size >= AKIDA_1500_HOST_DDR_SIZE_MIN) {
+		akida->host_ddr.cpu_addr = dmam_alloc_attrs(&akida->pdev->dev,
+			akida->host_ddr.size, &akida->host_ddr.dma_addr,
+			GFP_KERNEL, AKIDA_1500_HOST_DDR_DMA_ATTRS);
 
-	if (!akida->host_ddr.cpu_addr) {
-		pci_err(akida->pdev, "Failed to allocate host ddr area\n");
-		return -ENOMEM;
+		if (akida->host_ddr.cpu_addr) {
+			pci_info(akida->pdev, "Host ddr area: %zu bytes\n",
+				akida->host_ddr.size);
+			return 0;
+		}
+		pci_info(akida->pdev, "Host ddr area: Allocate %zu failed -> Try %zu\n",
+				akida->host_ddr.size,
+				akida->host_ddr.size / 2);
+		akida->host_ddr.size /= 2;
 	}
 
+	pci_err(akida->pdev, "Failed to allocate host ddr area (%zu bytes)\n",
+		akida->host_ddr.size);
+
+	/* Disable the host ddr access feature */
+	akida->host_ddr.size = 0;
 	return 0;
 }
 
@@ -615,17 +630,19 @@ static int akida_1500_setup_iatu(struct akida_dev *akida)
 		conf++;
 	}
 
-	/* Host DDR
-	 * EP_iATU Region 0 Outbound Setting
-	 */
-	writel(0x00000000, akida->mmio_bar0 + 0x404);
-	writel(0x00000000, akida->mmio_bar0 + 0x400);
-	writel(AKIDA_1500_HOST_DDR_BASE, akida->mmio_bar0 + 0x408);
-	writel(0x00000000, akida->mmio_bar0 + 0x40c);
-	writel(AKIDA_1500_HOST_DDR_BASE + AKIDA_1500_HOST_DDR_SIZE - 1, akida->mmio_bar0 + 0x410);
-	writel(lower_32_bits(akida->host_ddr.dma_addr), akida->mmio_bar0 + 0x414);
-	writel(upper_32_bits(akida->host_ddr.dma_addr), akida->mmio_bar0 + 0x418);
-	writel(0x80000000, akida->mmio_bar0 + 0x404);
+	if (akida->host_ddr.size) {
+		/* Host DDR
+		 * EP_iATU Region 0 Outbound Setting
+		 */
+		writel(0x00000000, akida->mmio_bar0 + 0x404);
+		writel(0x00000000, akida->mmio_bar0 + 0x400);
+		writel(AKIDA_1500_HOST_DDR_BASE, akida->mmio_bar0 + 0x408);
+		writel(0x00000000, akida->mmio_bar0 + 0x40c);
+		writel(AKIDA_1500_HOST_DDR_BASE + akida->host_ddr.size - 1, akida->mmio_bar0 + 0x410);
+		writel(lower_32_bits(akida->host_ddr.dma_addr), akida->mmio_bar0 + 0x414);
+		writel(upper_32_bits(akida->host_ddr.dma_addr), akida->mmio_bar0 + 0x418);
+		writel(0x80000000, akida->mmio_bar0 + 0x404);
+	}
 
 	/* Provide 1000ms sleep for iATU's to be setup */
 	msleep(1000);
