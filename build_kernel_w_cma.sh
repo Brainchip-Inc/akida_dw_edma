@@ -1,12 +1,11 @@
 #!/bin/bash
 
-# This scripts builds the kernel with CMA enabled with 32MB by default, adapted for usage with AKD1500.
+# This scripts builds the kernel with CMA enabled with 64MB by default, adapted
+# for usage with AKD1500.
 #
 # Info on how to build from:
 # - https://wiki.ubuntu.com/Kernel/BuildYourOwnKernel
 # - https://askubuntu.com/questions/1435591/correct-way-to-build-kernel-with-hardware-support-fix-patches-ubuntu-22-04-lts
-
-set -e
 
 POSTFIX=-cma-akd1500
 DIRNAME=linux-kernel$POSTFIX
