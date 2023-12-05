@@ -235,7 +235,13 @@ static const uint32_t pattern[] = {
 	0x55AA00FF,
 };
 
-static int test_host_ddr_simple(struct mmap_area *ddr, struct mmap_area *dma, int is_verbose, unsigned long param)
+enum test_result {
+	TEST_OK,
+	TEST_FAILED,
+	TEST_NOTDONE,
+};
+
+static enum test_result test_host_ddr_simple(struct mmap_area *ddr, struct mmap_area *dma, int is_verbose, unsigned long param)
 {
 	struct timespec tstart, tend;
 	struct dma_descriptor *desc;
@@ -286,7 +292,7 @@ static int test_host_ddr_simple(struct mmap_area *ddr, struct mmap_area *dma, in
 	if (err) {
 		fprintf(stderr,"dma_wait() failed (%d-%s)\n",
 			err, strerror(err));
-		return err;
+		return TEST_FAILED;
 	}
 
 	timestamp_get(&tend);
@@ -301,7 +307,7 @@ static int test_host_ddr_simple(struct mmap_area *ddr, struct mmap_area *dma, in
 		if (tmp != pattern[count]) {
 			fprintf(stderr,"dest[%d] = 0x%"PRIx32" != 0x%"PRIx32"\n",
 				count, tmp, pattern[count]);
-			return EILSEQ;
+			return TEST_FAILED;
 		}
 	}
 
@@ -309,10 +315,10 @@ static int test_host_ddr_simple(struct mmap_area *ddr, struct mmap_area *dma, in
 	if (is_verbose)
 		timestamp_print_delta("   check dst data duration: ", &tstart, &tend);
 
-	return 0;
+	return TEST_OK;
 }
 
-static int test_host_ddr_size(struct mmap_area *ddr, struct mmap_area *dma, int is_verbose, unsigned long param)
+static enum test_result test_host_ddr_size(struct mmap_area *ddr, struct mmap_area *dma, int is_verbose, unsigned long param)
 {
 	struct timespec tstart, tend;
 	struct dma_descriptor *desc;
@@ -335,7 +341,7 @@ static int test_host_ddr_size(struct mmap_area *ddr, struct mmap_area *dma, int 
 	if (data_size > 0x7fffe0) {
 		fprintf(stderr,"xfer size %zu (0x%zx), max supported %u (0x%x)\n",
 			data_size, data_size, 0x7fffe0, 0x7fffe0);
-		return EINVAL;
+		return TEST_NOTDONE;
 	}
 	desc = ddr->virt_addr;
 	data_src = ddr->virt_addr + 0x00000020;
@@ -376,7 +382,7 @@ static int test_host_ddr_size(struct mmap_area *ddr, struct mmap_area *dma, int 
 	if (err) {
 		fprintf(stderr,"dma_wait() failed (%d-%s)\n",
 			err, strerror(err));
-		return err;
+		return TEST_FAILED;
 	}
 
 	timestamp_get(&tend);
@@ -392,7 +398,7 @@ static int test_host_ddr_size(struct mmap_area *ddr, struct mmap_area *dma, int 
 		if (read != exp) {
 			fprintf(stderr,"dest[%zu] = 0x%"PRIx32" != 0x%"PRIx32"\n",
 				count, read, exp);
-			return EILSEQ;
+			return TEST_FAILED;
 		}
 	}
 
@@ -400,15 +406,50 @@ static int test_host_ddr_size(struct mmap_area *ddr, struct mmap_area *dma, int 
 	if (is_verbose)
 		timestamp_print_delta("   check dst data duration: ", &tstart, &tend);
 
-	return 0;
+	return TEST_OK;
 }
 
-static int do_tests(struct mmap_area *ddr, struct mmap_area *dma, int is_verbose)
+static const char *test_result2str(enum test_result result)
+{
+	switch (result) {
+	case TEST_OK: return "ok";
+	case TEST_FAILED: return "FAILED";
+	case TEST_NOTDONE: return "Not Done";
+	default: break;
+	}
+	return "???";
+}
+
+struct tests_stats {
+	int total;
+	int ok;
+	int failed;
+	int not_done;
+};
+
+static void update_tests_stats(struct tests_stats *stats, enum test_result result)
+{
+	stats->total++;
+
+	switch (result) {
+	case TEST_OK:
+		stats->ok++;
+		break;
+	case TEST_FAILED:
+		stats->failed++;
+		break;
+	case TEST_NOTDONE:
+		stats->not_done++;
+		break;
+	}
+}
+
+static int do_tests(struct mmap_area *ddr, struct mmap_area *dma, struct tests_stats *stats, int is_verbose)
 {
 	const struct test_def {
 		const char *name;
-		int (*tst_fct)(struct mmap_area *ddr, struct mmap_area *dma,
-			       int is_verbose, unsigned long param);
+		enum test_result (*tst_fct)(struct mmap_area *ddr, struct mmap_area *dma,
+					    int is_verbose, unsigned long param);
 		unsigned long param;
 	} tab_test[] = {
 		{ "test_host_ddr simple", test_host_ddr_simple, 0 },
@@ -423,16 +464,17 @@ static int do_tests(struct mmap_area *ddr, struct mmap_area *dma, int is_verbose
 		{ "test_host_ddr  max", test_host_ddr_size, 0x7fffe0 },
 		{ 0}
 	}, *test;
-	int err;
-	int failed;
+	enum test_result result;
+	int failed = 0;
 
-	failed = 0;
 	test = tab_test;
 	do {
 		printf("-- %s\n", test->name);
-		err = test->tst_fct(ddr, dma, is_verbose, test->param);
-		printf("-- %s %s\n", test->name, err ? "FAILED" : "ok");
-		if (err)
+		result = test->tst_fct(ddr, dma, is_verbose, test->param);
+		printf("-- %s %s\n", test->name, test_result2str(result));
+
+		update_tests_stats(stats, result);
+		if (result == TEST_FAILED)
 			failed++;
 	} while ((++test)->name);
 
@@ -447,6 +489,7 @@ static void usage(const char *prog_name)
 
 int main(int argc, char* argv[])
 {
+	struct tests_stats stats;
 	const char *devpath;
 	struct mmap_area dma;
 	struct mmap_area ddr;
@@ -477,8 +520,22 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	/* Raz test stats */
+	memset(&stats, 0, sizeof(stats));
+
 	/* Do the tests */
-	failed = do_tests(&ddr, &dma, 1);
+	failed = do_tests(&ddr, &dma, &stats, 1);
+
+	printf("results:\n");
+	printf("- run    %d/%d\n", stats.total - stats.not_done, stats.total);
+	printf("- ok     %d/%d\n", stats.ok, stats.total - stats.not_done);
+	printf("- failed %d/%d\n", stats.failed, stats.total - stats.not_done);
+
+	if (stats.ok + stats.failed + stats.not_done != stats.total) {
+		printf("!!! ok + failed + not done != total (%d + %d + %d != %d)\n",
+			stats.ok, stats.failed, stats.not_done, stats.total);
+		failed = 1;
+	}
 
 	mmap_area_exit(&ddr);
 	mmap_area_exit(&dma);
