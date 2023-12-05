@@ -463,15 +463,18 @@ static int do_tests(struct mmap_area *ddr, struct mmap_area *dma, struct tests_s
 		unsigned long param;
 	} tab_test[] = {
 		{ "test_host_ddr simple", test_host_ddr_simple, 0 },
-		{ "test_host_ddr   32", test_host_ddr_size, 32 },
-		{ "test_host_ddr  256", test_host_ddr_size, 256 },
-		{ "test_host_ddr 1236", test_host_ddr_size, 1236 },
-		{ "test_host_ddr 4096", test_host_ddr_size, 4096 },
-		{ "test_host_ddr 8000", test_host_ddr_size, 8000 },
-		{ "test_host_ddr  1MB", test_host_ddr_size, 1*1024*1024 },
-		{ "test_host_ddr  2MB", test_host_ddr_size, 2*1024*1024 },
-		{ "test_host_ddr  4MB", test_host_ddr_size, 4*1024*1024 },
-		{ "test_host_ddr  max", test_host_ddr_size, 0x7fffe0 },
+		{ "test_host_ddr    32", test_host_ddr_size, 32 },
+		{ "test_host_ddr   256", test_host_ddr_size, 256 },
+		{ "test_host_ddr  1236", test_host_ddr_size, 1236 },
+		{ "test_host_ddr  4096", test_host_ddr_size, 4096 },
+		{ "test_host_ddr  8000", test_host_ddr_size, 8000 },
+		{ "test_host_ddr ~1MiB", test_host_ddr_size, 1*1024*1024 - 0x20 },
+		{ "test_host_ddr  1MiB", test_host_ddr_size, 1*1024*1024 },
+		{ "test_host_ddr ~2MiB", test_host_ddr_size, 2*1024*1024 - 0x20 },
+		{ "test_host_ddr  2MiB", test_host_ddr_size, 2*1024*1024 },
+		{ "test_host_ddr ~4MiB", test_host_ddr_size, 4*1024*1024 - 0x20 },
+		{ "test_host_ddr  4MiB", test_host_ddr_size, 4*1024*1024 },
+		{ "test_host_ddr ~8MiB", test_host_ddr_size, 8*1024*1024 - 0x20 },
 		{ 0}
 	}, *test;
 	enum test_result result;
