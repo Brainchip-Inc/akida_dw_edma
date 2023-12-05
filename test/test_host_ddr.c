@@ -251,12 +251,13 @@ static enum test_result test_host_ddr_simple(struct mmap_area *ddr, struct mmap_
 	int count;
 	int err;
 
-	/* AKD1500 DMA Reset, issued from RC */
-	dma_reset(dma);
 
 	desc     = ddr->virt_addr + 0x1000;
 	data_src = ddr->virt_addr + 0x2000;
 	data_dst = ddr->virt_addr + 0x3000;
+
+	/* AKD1500 DMA Reset, issued from RC */
+	dma_reset(dma);
 
 	if (is_verbose)
 		printf("   xfer size: %zu (0x%zx) bytes\n",
@@ -330,9 +331,6 @@ static enum test_result test_host_ddr_size(struct mmap_area *ddr, struct mmap_ar
 	size_t count;
 	int err;
 
-	/* AKD1500 DMA Reset, issued from RC */
-	dma_reset(dma);
-
 	/* Host DDR : max 16 MB (0x01000000)
 	 * @0x00000000-0x0000001f: one DMA descriptor
 	 * @0x00000020-0x007fffff: data src size up to 0x7fffe0
@@ -347,6 +345,9 @@ static enum test_result test_host_ddr_size(struct mmap_area *ddr, struct mmap_ar
 	desc = ddr->virt_addr;
 	data_src = ddr->virt_addr + 0x00000020;
 	data_dst = ddr->virt_addr + 0x00800000;
+
+	/* AKD1500 DMA Reset, issued from RC */
+	dma_reset(dma);
 
 	if (is_verbose)
 		printf("   xfer size: %zu (0x%zx) bytes\n", data_size, data_size);
