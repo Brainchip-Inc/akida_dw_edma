@@ -66,13 +66,13 @@ make deb-pkg LOCALVERSION=-cma-akd1500
 
 echo
 echo
-echo "🎉 Kernel is now built! Availables packages are in $DIRNAME:"
-echo
-ls $DIRNAME/*.deb
-echo
+echo "🎉 Kernel is now built! Availables packages are in $DIRNAME."
 echo "You can install those with these commands:"
 echo
 echo "sudo dpkg -i $DIRNAME/*.deb"
 echo "sudo update-grub"
 echo "sudo reboot"
+echo
+echo "Once rebooted, you will need to re-build the akd1500 PCIe module."
+echo "To do that, you can run './install.sh'"
 echo
