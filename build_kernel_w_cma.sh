@@ -19,6 +19,8 @@ if [ $ret -eq 0 ]; then
     exit 0
 fi
 
+set -e
+
 mkdir -p $DIRNAME
 cd $DIRNAME
 
@@ -70,7 +72,6 @@ echo "🎉 Kernel is now built! Availables packages are in $DIRNAME."
 echo "You can install those with these commands:"
 echo
 echo "sudo dpkg -i $DIRNAME/*.deb"
-echo "sudo update-grub"
 echo "sudo reboot"
 echo
 echo "Once rebooted, you will need to re-build the akd1500 PCIe module."
