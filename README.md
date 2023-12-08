@@ -39,7 +39,7 @@ distribution:
 
 > Note: this command might take long time because parallel build is not set by default. To enable that you can export this environment variable before launching the build to use a number of jobs equivalent to the number of available cores:
 >
-> `export MAKEFLAGS=$(nproc)`
+> `export MAKEFLAGS="-j $(nproc)"`
 
 
 The script will create the packages and explain how to install and boot on the
