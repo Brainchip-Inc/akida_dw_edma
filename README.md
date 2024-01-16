@@ -45,18 +45,34 @@ distribution:
 The script will create the packages and explain how to install and boot on the
 new kernel.
 
+Note that this will not prevent the upgrade and install of new kernel versions
+on your system. If you want to do that on Ubuntu, you can run:
+
+```
+sudo apt-mark hold `uname -r`
+```
+
+Note that this will prevent security updates on current kernels, and that might
+not be safe in some environments.
 If you want to go back to an old kernel that does not contain the CMA feature,
 you can grep the installed kernels that were configured in grub:
 
 ```
-grep 'menuentry \|submenu ' /boot/grub/grub.cfg | cut -f2 -d "'"
+sudo grub-mkconfig | grep -iE "menuentry 'Ubuntu, with Linux" | awk '{print i++ " : "$1, $2, $3, $4, $5, $6, $7}'
 ```
 
-And then modify the `/etc/default/grub` file from: `GRUB_DEFAULT=0`
-to: `GRUB_DEFAULT=2` if you want the third kernel choice in the obtained list,
-etc.
+This will print a list of options prefixed by a number. If you want to select
+for example the item 2, modify the `/etc/default/grub` file from:
+`GRUB_DEFAULT=0` to: `GRUB_DEFAULT="1>2"`.
 
-Source: https://unix.stackexchange.com/questions/432393/downgrade-linux-kernel-without-grub
+Once done, you will need to invoke `update-grub` and reboot:
+
+```
+sudo update-grub
+sudo reboot
+```
+
+Source: https://askubuntu.com/questions/82140/how-can-i-boot-with-an-older-kernel-version
 
 
 ## Support
