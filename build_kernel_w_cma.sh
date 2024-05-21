@@ -55,6 +55,10 @@ echo "CONFIG_CMA=y" >> ./.config
 echo "CONFIG_CMA_SIZE_MBYTES=$MBYTES_CMA" >> ./.config
 echo "CONFIG_CMA_SIZE_SEL_MBYTES=y" >> ./.config
 
+# Build w/a disabling signing
+sed -i -e  "s/CONFIG_SYSTEM_TRUSTED_KEYS.*/CONFIG_SYSTEM_TRUSTED_KEYS=\"\"/g" ./.config
+sed -i -e  "s/CONFIG_SYSTEM_REVOCATION_KEYS.*/CONFIG_SYSTEM_REVOCATION_KEYS=\"\"/g" ./.config
+
 # update config for new kernel with default options for other settings
 make olddefconfig
 
@@ -64,7 +68,7 @@ echo "👉 Kernel will now be built, this might take a while."
 echo
 echo
 
-make deb-pkg LOCALVERSION=-cma-akd1500
+make bindeb-pkg LOCALVERSION=-cma-akd1500
 
 echo
 echo
