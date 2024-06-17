@@ -25,7 +25,8 @@
 #include "dw-edma-core.h"
 #include "akida-edma.h"
 
-static DEFINE_IDA(akida_devno);
+static DEFINE_IDA(akida_1000_devno);
+static DEFINE_IDA(akida_1500_devno);
 
 /* The DMA RAM area contains eDMA linked-list (LL) and data (DT).
  * This area is used by the eDMA controler and is located inside the device.
@@ -85,6 +86,7 @@ struct akida_dma_chan {
 
 struct akida_dev {
 	struct pci_dev *pdev;
+	struct ida *ida;
 	int devno;
 	struct miscdevice miscdev;
 	struct dw_edma_chip edma_chip;
@@ -836,22 +838,24 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	struct akida_ops ops;
 	int ret, nr_irqs;
 
-	switch (board_id) {
-	case AKIDA_1000:
-		ops = akida_1000_ops;
-		break;
-	case AKIDA_1500:
-		ops = akida_1500_ops;
-		break;
-	default:
-		return -EOPNOTSUPP;
-	}
-
 	akida = devm_kzalloc(&pdev->dev, sizeof(*akida), GFP_KERNEL);
 	if (!akida)
 		return -ENOMEM;
 
 	akida->pdev = pdev;
+
+	switch (board_id) {
+	case AKIDA_1000:
+		ops = akida_1000_ops;
+		akida->ida = &akida_1000_devno;
+		break;
+	case AKIDA_1500:
+		ops = akida_1500_ops;
+		akida->ida = &akida_1500_devno;
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
 
 	/* Disable ASPM L0s and L1 states as they cause device stop working */
 	pci_disable_link_state(pdev, PCIE_LINK_STATE_L0S | PCIE_LINK_STATE_L1);
@@ -1072,13 +1076,13 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	init_waitqueue_head(&akida->wq_txchan);
 
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
-	ret = ida_simple_get(&akida_devno, 0, 0, GFP_KERNEL);
+	ret = ida_simple_get(akida->ida, 0, 0, GFP_KERNEL);
 	if (ret < 0) {
 		pci_err(pdev, "ida simple get failed (%d)\n", ret);
 		goto fail_akida_dma_exit;
 	}
 #else
-	ret = ida_alloc(&akida_devno, GFP_KERNEL);
+	ret = ida_alloc(akida->ida, GFP_KERNEL);
 	if (ret < 0) {
 		pci_err(pdev, "ida alloc failed (%d)\n", ret);
 		goto fail_akida_dma_exit;
@@ -1108,9 +1112,9 @@ static int akida_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 
 fail_ida_alloc:
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
-	ida_simple_remove(&akida_devno, akida->devno);
+	ida_simple_remove(akida->ida, akida->devno);
 #else
-	ida_free(&akida_devno, akida->devno);
+	ida_free(akida->ida, akida->devno);
 #endif
 fail_akida_dma_exit:
 	akida_dma_exit(akida);
@@ -1128,9 +1132,9 @@ static void akida_remove(struct pci_dev *pdev)
 
 	misc_deregister(&akida->miscdev);
 #if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
-	ida_simple_remove(&akida_devno, akida->devno);
+	ida_simple_remove(akida->ida, akida->devno);
 #else
-	ida_free(&akida_devno, akida->devno);
+	ida_free(akida->ida, akida->devno);
 #endif
 	if (akida->txchan[0].chan && akida->rxchan[0].chan)
 		akida_dma_exit(akida);
