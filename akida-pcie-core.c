@@ -1147,7 +1147,11 @@ static void akida_remove(struct pci_dev *pdev)
 		pci_free_irq_vectors(pdev);
 
 	if (akida->mmio_bar0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 0, 0)
+		pcim_iounmap_region(pdev, BAR_0);
+#else
 		pcim_iounmap_regions(pdev, BIT(BAR_0));
+#endif
 
 	pci_info(pdev, "removed\n");
 }
