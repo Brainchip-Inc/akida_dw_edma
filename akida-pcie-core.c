@@ -1146,8 +1146,14 @@ static void akida_remove(struct pci_dev *pdev)
 	if (pci_dev_msi_enabled(pdev))
 		pci_free_irq_vectors(pdev);
 
-	if (akida->mmio_bar0)
+	if (akida->mmio_bar0) {
+/* pcim_iounmap_regions() was removed in kernel 6.16 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 16, 0)
+		pcim_iounmap_region(pdev, BAR_0);
+#else
 		pcim_iounmap_regions(pdev, BIT(BAR_0));
+#endif
+	}
 
 	pci_info(pdev, "removed\n");
 }

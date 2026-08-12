@@ -4,8 +4,11 @@ ifneq ($(KERNELRELEASE),)
 # Some files needed by the dw-edma drivers are not exported and are locally
 # copied in kernel/x.y/ subdirectory depending on kernel API changes.
 # These files are drivers/dma/dmaengine.h and drivers/dma/virt-dma.h
+# Latest kernel version this driver has been validated against
+AKIDA_KERNEL_VERSION_LATEST_VALIDATED := 7.1
+
 AKIDA_KERNEL_VERSION_RANK := $(shell \
-	printf "$(VERSION).$(PATCHLEVEL)\n5.4\n5.6\n5.7\n5.9\n5.16\n6.9\n" | \
+	printf "$(VERSION).$(PATCHLEVEL)\n5.4\n5.6\n5.7\n5.9\n5.16\n$(AKIDA_KERNEL_VERSION_LATEST_VALIDATED)\n" | \
 	sort -V )
 
 ifneq ($(word 1,$(AKIDA_KERNEL_VERSION_RANK)), 5.4)
@@ -38,15 +41,19 @@ akida-pcie-y += akida-dw-edma/dw-edma-v0-core.o
 akida-pcie-y += akida-dw-edma/dw-edma-v0-debugfs.o
 akida-pcie-y += akida-dw-edma/dw-hdma-v0-core.o
 akida-pcie-y += akida-dw-edma/dw-hdma-v0-debugfs.o
-else ifneq ($(word 6,$(AKIDA_KERNEL_VERSION_RANK)), 6.9)
+else
+# Kernel >= 5.16
+# Warn (but do not fail) on kernels newer than the latest validated one.
+# Real incompatibilities will surface as compile errors.
+ifneq ($(word 7,$(AKIDA_KERNEL_VERSION_RANK)), $(AKIDA_KERNEL_VERSION_LATEST_VALIDATED))
+$(warning Kernel $(VERSION).$(PATCHLEVEL) has not been validated with this driver (latest validated: $(AKIDA_KERNEL_VERSION_LATEST_VALIDATED)))
+endif
 ccflags-y += -I$(src)/kernel/5.16/drivers/dma
 akida-pcie-y += akida-dw-edma/dw-edma-core.o
 akida-pcie-y += akida-dw-edma/dw-edma-v0-core.o
 akida-pcie-y += akida-dw-edma/dw-edma-v0-debugfs.o
 akida-pcie-y += akida-dw-edma/dw-hdma-v0-core.o
 akida-pcie-y += akida-dw-edma/dw-hdma-v0-debugfs.o
-else
-$(error Kernel $(VERSION).$(PATCHLEVEL) not supported. Some incompatibilities can be present)
 endif
 
 # Use the edma.h header exported from last version of edma driver
