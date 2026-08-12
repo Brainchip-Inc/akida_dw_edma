@@ -10,6 +10,15 @@ Some minor modifications were done:
 - Rename exported symbols to avoid name collision with upstream module
 - Add akida-edma.h to declare renamed symbols
 
+The following upstream fixes were backported on top of the snapshot
+(all in dw-hdma-v0-core.c, HDMA native mode / AKD1500 only):
+- 383baf5c8f06 ("dmaengine: dw-edma: Fix unmasking STOP and ABORT interrupts
+  for HDMA") - v6.12
+- 9f646ff25c09 ("dmaengine: dw-edma: Do not enable watermark interrupts for
+  HDMA") - v6.12
+- 3f63297ff61a ("dmaengine: dw-edma: Fix multiple times setting of
+  CYCLE_STATE/CYCLE_BIT for HDMA") - v7.1
+
 In order to update this directory from files updated in an upstream kernel,
 perform the following steps:
 - Copy/paste files from the upstream kernel
