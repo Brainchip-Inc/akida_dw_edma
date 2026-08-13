@@ -1,28 +1,76 @@
 # Akida PCIe driver
 ## Installing driver
-Prerequisite: having gcc & build tools available, and kernel headers available
+Prerequisite: having gcc & build tools available, kernel headers available,
+and DKMS.
 
 On Ubuntu:
 ```
-sudo apt install build-essential linux-headers-$(uname -r)
+sudo apt install dkms build-essential linux-headers-$(uname -r)
 ```
 
-Then simply run the install script from current directory.
+The driver is packaged for DKMS (Dynamic Kernel Module Support), so once
+installed it is automatically rebuilt and reinstalled every time you update
+your kernel — no manual step required after the initial install.
+
+### Quick install
+
+Run the install script from the current directory:
 ```
 ./install.sh
 ```
-It will build the driver, remove old installed driver versions if any,
-and load the new one.
-It will also configure modules to load it at every boot, and give read/write
-access on `/dev/akida*` to __every__ user.
+It registers the driver with DKMS, builds and installs it for the running
+kernel, and cleans up any leftovers from a pre-DKMS install of this driver
+(a `.ko` copied directly into `/lib/modules/.../kernel/drivers` and the
+corresponding `/etc/modules` line).
 
-If you want to control permissions, edit the udev rules with your own
-preferences in `99-akida-pcie.rules`
+The udev rule installed alongside the module gives read/write access on
+`/dev/akida*` to __every__ user by default. If you want to control
+permissions, edit `99-akida-pcie.rules` before installing, or in
+`/etc/udev/rules.d/99-akida-pcie.rules` afterwards, then run
+`sudo udevadm control --reload-rules && sudo udevadm trigger`.
 
-If you don't want the driver to load on every boot, edit the `/etc/modules`
-file after installation and remove `akida_pcie` line.
+The driver loads automatically via udev when a device is present — no
+`/etc/modules` entry is needed.
 
-***After a kernel update you need to run the install script again.***
+### Manual install
+
+If you'd rather drive DKMS directly instead of using `install.sh`:
+```
+sudo git clone https://github.com/Brainchip-Inc/akida_dw_edma /usr/src/akida-pcie-1.0
+sudo dkms add -m akida-pcie -v 1.0
+sudo dkms build -m akida-pcie -v 1.0
+sudo dkms install -m akida-pcie -v 1.0
+```
+
+### Uninstalling
+
+```
+sudo dkms remove -m akida-pcie -v 1.0 --all
+sudo rm -rf /usr/src/akida-pcie-1.0
+```
+
+### Non-default DMA RAM PHY configuration
+
+If you build with a non-default `CFG_AKIDA_DMA_RAM_PHY_FILE` (see
+`cfg_dma_ram_phy_*.mk`), be aware that DKMS's automatic rebuild on kernel
+upgrade (`AUTOINSTALL="yes"`, run from a kernel postinst hook) always
+builds with the default configuration — there is no way to persist that
+variable into an unattended, kernel-triggered rebuild. After a kernel
+upgrade, re-run the build manually with the variable exported so it reaches
+DKMS's environment:
+```
+sudo -E env CFG_AKIDA_DMA_RAM_PHY_FILE=cfg_dma_ram_phy_4MB.mk \
+    dkms install -m akida-pcie -v 1.0 --force
+```
+
+### Known limitation: kernel 6.9 and newer
+
+The vendored DMA headers in this repo only support kernel 5.4 through 6.8
+(see the version guard in `Makefile`). `dkms.conf` restricts the build to
+that range, so on 6.9+ DKMS reports the module as "not applicable" instead
+of failing — but the driver will not build or load on those kernels.
+Support for 6.9+ against the kernel's in-tree `dw-edma` is tracked
+separately in issue #23; this is not fixed here.
 
 ## Enable CMA in the kernel
 

@@ -1,48 +1,61 @@
 #!/usr/bin/env bash
 
-# This script will build and install akida-pcie driver module
-# It will write to /etc/modules file to auto load driver at boot,
-# and add an udev rule to make /dev/akida* with 666 chmod
-# It will also remove the pedd_bc driver if present
+# This script installs the akida-pcie driver via DKMS, so it is automatically
+# rebuilt and reinstalled on every kernel update instead of only once, now.
+#
+# If a previous version of this script was used on this machine, it will
+# have copied akida-pcie.ko straight into the kernel/drivers directory and
+# added an /etc/modules entry. That path conflicts with DKMS, which installs
+# into .../updates instead, so this script first removes any such leftovers.
 
-echo "Building akida-pcie driver module"
-# Clean & build driver
-make clean
-make || exit 1
+set -euo pipefail
 
-# Copy driver to /lib/modules folder
-modules_dir="/lib/modules/$(uname -r)/kernel/drivers"
-echo "Build successful! Copying driver to '$modules_dir'"
-sudo cp -f akida-pcie.ko "$modules_dir" || exit 1
+PACKAGE_NAME="akida-pcie"
+PACKAGE_VERSION="1.0"
+SRC_DIR="/usr/src/${PACKAGE_NAME}-${PACKAGE_VERSION}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Unload eventual drivers
-sudo rmmod pedd_bc 2> /dev/null
-sudo rmmod akida_pcie 2> /dev/null
+if ! command -v dkms >/dev/null 2>&1; then
+    echo "dkms is not installed. Install it first, e.g. on Ubuntu/Debian:" >&2
+    echo "  sudo apt install dkms build-essential linux-headers-\$(uname -r)" >&2
+    exit 1
+fi
 
-# Remove old pedd_bc driver if it exists
-if [[ -f "$modules_dir/pedd-bc.ko" ]]; then
+echo "Cleaning up any pre-DKMS install"
+
+# Old pedd_bc driver, predating akida-pcie entirely.
+sudo rmmod pedd_bc 2> /dev/null || true
+legacy_pedd="/lib/modules/$(uname -r)/kernel/drivers/pedd-bc.ko"
+if [[ -f "$legacy_pedd" ]]; then
     echo "Removing old pedd-bc driver"
-    sudo rm -f "$modules_dir/pedd-bc.ko" || exit 1
+    sudo rm -f "$legacy_pedd"
 fi
 
-# Update /etc/modules file
-echo "Updating /etc/modules file"
-# This sed call match pedd_bc or akida_pcie and replace it by akida_pcie
-# It makes sed return 0 if match was found 1 otherwise
-sudo sed -E -i '/pedd_bc|akida_pcie/{s//akida_pcie/;h};${x;/./{x;q0};x;q1}' /etc/modules
-# if our driver was not in /etc/modules file append it
-if [[ $? -eq 1 ]]; then
-    echo "akida_pcie" | sudo tee -a /etc/modules > /dev/null
+# akida-pcie.ko copied directly by a previous version of this script.
+legacy_ko="/lib/modules/$(uname -r)/kernel/drivers/akida-pcie.ko"
+if [[ -f "$legacy_ko" ]]; then
+    echo "Removing stale module: $legacy_ko"
+    sudo rmmod akida_pcie 2> /dev/null || true
+    sudo rm -f "$legacy_ko"
+    sudo sed -E -i '/^akida_pcie$/d' /etc/modules
+    sudo depmod
 fi
-echo "Copying udev rule"
-sudo cp 99-akida-pcie.rules /etc/udev/rules.d || exit 1
 
-# Calling depmod, load driver & udevadm trigger
-echo "Reloading modules dependencies"
-sudo depmod || exit 1
-echo "Loading driver"
-sudo modprobe akida-pcie || exit 1
-echo "Triggering udev rules"
-sudo udevadm trigger || exit 1
+echo "Staging sources under $SRC_DIR for DKMS"
+if [[ "$SCRIPT_DIR" != "$SRC_DIR" ]]; then
+    sudo mkdir -p "$SRC_DIR"
+    sudo rsync -a --delete "$SCRIPT_DIR"/ "$SRC_DIR"/ 2>/dev/null || sudo cp -a "$SCRIPT_DIR"/. "$SRC_DIR"/
+fi
 
-echo "akida-pcie was succesfully installed!"
+if sudo dkms status "${PACKAGE_NAME}/${PACKAGE_VERSION}" 2>/dev/null | grep -q .; then
+    echo "Removing previously registered DKMS module to rebuild it cleanly"
+    sudo dkms remove -m "$PACKAGE_NAME" -v "$PACKAGE_VERSION" --all
+fi
+
+sudo dkms add -m "$PACKAGE_NAME" -v "$PACKAGE_VERSION"
+sudo dkms build -m "$PACKAGE_NAME" -v "$PACKAGE_VERSION"
+sudo dkms install -m "$PACKAGE_NAME" -v "$PACKAGE_VERSION"
+sudo udevadm trigger
+
+echo "akida-pcie was installed via DKMS and will be rebuilt automatically on kernel updates."
+echo "To remove it: sudo dkms remove -m $PACKAGE_NAME -v $PACKAGE_VERSION --all"
